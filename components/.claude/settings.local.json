@@ -22,7 +22,16 @@
       "Bash(npx vercel --version)",
       "Bash(npx tsc --noEmit)",
       "Bash(npx vite build)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(git remote add origin https://github.com/azonzoo/codemaster-governance.git)",
+      "Bash(git push -u origin master)",
+      "Bash(where gh)",
+      "Bash(git config credential.helper)",
+      "Bash(git config --global credential.helper)",
+      "Bash(git credential-manager)",
+      "Bash(printf \"protocol=https\\\\nhost=github.com\\\\n\")",
+      "Bash(git credential-manager get)",
+      "Bash(git add components/.claude/settings.local.json)"
     ]
   }
 }
