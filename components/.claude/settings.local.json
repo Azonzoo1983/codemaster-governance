@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find \"C:/Users/User/Desktop/codemaster-governance \\(1\\)/components\" -type f -name \"*.json\" -o -name \"*.ts\" -o -name \"*.tsx\" -o -name \"*.js\" -o -name \"*.jsx\")",
+      "Bash(ls -la \"C:/Users/User/Desktop/codemaster-governance \\(1\\)/components/\")",
+      "Bash(find \"C:/Users/User/Desktop/codemaster-governance \\(1\\)/components\" -type f)",
+      "Bash(find \"C:/Users/User/Desktop/codemaster-governance \\(1\\)/pages\" -type f)",
+      "Bash(wc -l \"C:/Users/User/Desktop/codemaster-governance \\(1\\)\"/pages/*.tsx)",
+      "Bash(find \"C:/Users/User/Desktop/codemaster-governance \\(1\\)\" -type f -not -path \"*/node_modules/*\" -not -path \"*/.git/*\")",
+      "Bash(ls \"C:\\\\Users\\\\User\\\\Desktop\\\\codemaster-governance \\(1\\)\\\\.claude\")",
+      "Bash(ls -la \"C:/Users/User/Desktop/codemaster-governance \\(1\\)/components\")",
+      "Bash(find \"C:/Users/User/Desktop/codemaster-governance \\(1\\)/\" -type f -name \"*\")",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(ls \"C:/Users/User/Desktop/codemaster-governance \\(1\\)/node_modules/vite/bin/vite.js\")",
+      "Bash(ls \"C:/Users/User/Desktop/codemaster-governance \\(1\\)/node_modules/\")",
+      "Bash(ls -d \"C:/Users/User/Desktop/codemaster-governance \\(1\\)/node_modules\")",
+      "Bash(npm install)",
+      "Bash(find \"C:/Users/User/Desktop/codemaster-governance \\(1\\)\" -type f -name \"*.ts\" -o -name \"*.tsx\" -o -name \"*.json\" -o -name \"*.css\" -o -name \"*.html\")",
+      "Bash(npm install @supabase/supabase-js)",
+      "Bash(git init)",
+      "Bash(git add -A)",
+      "Bash(npx vercel --version)",
+      "Bash(npx tsc --noEmit)",
+      "Bash(npx vite build)",
+      "Bash(git commit:*)"
+    ]
+  }
+}
