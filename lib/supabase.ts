@@ -9,6 +9,12 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export const supabase = createClient(supabaseUrl || '', supabaseAnonKey || '');
 
+// --- Result type for DB operations ---
+export interface DbResult {
+  success: boolean;
+  error?: string;
+}
+
 // --- Generic CRUD helpers for JSONB tables ---
 // Each table has: id TEXT PRIMARY KEY, data JSONB NOT NULL
 
@@ -21,28 +27,40 @@ export async function loadAll<T extends { id: string }>(table: string): Promise<
   return (data || []).map((row: { data: T }) => row.data);
 }
 
-export async function upsertRecord<T extends { id: string }>(table: string, record: T): Promise<void> {
+export async function upsertRecord<T extends { id: string }>(
+  table: string,
+  record: T
+): Promise<DbResult> {
   const { error } = await supabase
     .from(table)
     .upsert({ id: record.id, data: record }, { onConflict: 'id' });
   if (error) {
     console.error(`Failed to upsert ${table}/${record.id}:`, error.message);
+    return { success: false, error: error.message };
   }
+  return { success: true };
 }
 
-export async function deleteRecord(table: string, id: string): Promise<void> {
+export async function deleteRecord(table: string, id: string): Promise<DbResult> {
   const { error } = await supabase.from(table).delete().eq('id', id);
   if (error) {
     console.error(`Failed to delete ${table}/${id}:`, error.message);
+    return { success: false, error: error.message };
   }
+  return { success: true };
 }
 
-export async function upsertMany<T extends { id: string }>(table: string, records: T[]): Promise<void> {
-  const rows = records.map(r => ({ id: r.id, data: r }));
+export async function upsertMany<T extends { id: string }>(
+  table: string,
+  records: T[]
+): Promise<DbResult> {
+  const rows = records.map((r) => ({ id: r.id, data: r }));
   const { error } = await supabase.from(table).upsert(rows, { onConflict: 'id' });
   if (error) {
     console.error(`Failed to bulk upsert ${table}:`, error.message);
+    return { success: false, error: error.message };
   }
+  return { success: true };
 }
 
 // --- Table names ---

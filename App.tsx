@@ -1,6 +1,6 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { StoreProvider, useStore } from './store';
+import { useInitializeStores } from './stores';
 import { Layout } from './components/Layout';
 import { ToastContainer } from './components/ToastContainer';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -25,7 +25,7 @@ const LoadingScreen: React.FC = () => (
 );
 
 const AppRoutes: React.FC = () => {
-  const { loading } = useStore();
+  const loading = useInitializeStores();
 
   if (loading) return <LoadingScreen />;
 
@@ -49,10 +49,8 @@ const App: React.FC = () => {
   return (
     <ErrorBoundary>
       <BrowserRouter>
-        <StoreProvider>
-          <AppRoutes />
-          <ToastContainer />
-        </StoreProvider>
+        <AppRoutes />
+        <ToastContainer />
       </BrowserRouter>
     </ErrorBoundary>
   );

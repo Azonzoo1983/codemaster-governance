@@ -1,0 +1,89 @@
+import { useEffect, useCallback, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+
+export interface Shortcut {
+  key: string;
+  description: string;
+  ctrl?: boolean;
+  shift?: boolean;
+}
+
+export const SHORTCUTS: Shortcut[] = [
+  { key: 'n', description: 'New Request' },
+  { key: '/', description: 'Focus Search' },
+  { key: 'Escape', description: 'Go Back / Close' },
+  { key: '?', description: 'Show Keyboard Shortcuts', shift: true },
+  { key: 'k', description: 'Show Keyboard Shortcuts', ctrl: true },
+  { key: 'h', description: 'Go to Dashboard' },
+  { key: 'r', description: 'Go to Reports' },
+];
+
+export function useKeyboardShortcuts() {
+  const navigate = useNavigate();
+  const [showHelp, setShowHelp] = useState(false);
+
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      // Don't trigger shortcuts when typing in inputs
+      const target = e.target as HTMLElement;
+      if (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.tagName === 'SELECT' ||
+        target.isContentEditable
+      ) {
+        // Allow Escape in inputs
+        if (e.key === 'Escape') {
+          (target as HTMLInputElement).blur();
+          return;
+        }
+        return;
+      }
+
+      // Ctrl+K or Shift+? — show help
+      if ((e.ctrlKey && e.key === 'k') || (e.shiftKey && e.key === '?')) {
+        e.preventDefault();
+        setShowHelp((prev) => !prev);
+        return;
+      }
+
+      // Don't trigger single-key shortcuts with modifier keys (except above)
+      if (e.ctrlKey || e.altKey || e.metaKey) return;
+
+      switch (e.key) {
+        case 'n':
+          e.preventDefault();
+          navigate('/requests/new');
+          break;
+        case '/':
+          e.preventDefault();
+          // Focus the search input on the dashboard
+          const searchInput = document.querySelector<HTMLInputElement>(
+            'input[placeholder*="Search"], input[aria-label*="Search"]'
+          );
+          if (searchInput) {
+            searchInput.focus();
+            searchInput.select();
+          }
+          break;
+        case 'Escape':
+          setShowHelp(false);
+          break;
+        case 'h':
+          navigate('/');
+          break;
+        case 'r':
+          navigate('/reports');
+          break;
+      }
+    },
+    [navigate]
+  );
+
+  useEffect(() => {
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [handleKeyDown]);
+
+  return { showHelp, setShowHelp };
+}

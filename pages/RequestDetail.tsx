@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useStore, useToast } from '../store';
+import { useRequestStore, useUserStore, useAdminStore, useToastStore } from '../stores';
 import { RequestStatus, Role, Classification, ClarificationComment } from '../types';
 import { DynamicForm } from '../components/DynamicForm';
 import { ArrowLeft, CheckCircle, XCircle, UserPlus, AlertTriangle, FileCheck, Mail, Edit3, RotateCcw, CornerUpLeft, Paperclip, Download, User as UserIcon, MessageSquare, Send, Clock, RefreshCw } from 'lucide-react';
@@ -8,8 +8,14 @@ import { ArrowLeft, CheckCircle, XCircle, UserPlus, AlertTriangle, FileCheck, Ma
 export const RequestDetail: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
-  const { requests, currentUser, updateRequestStatus, updateRequest, users, priorities, attributes } = useStore();
-  const { addToast } = useToast();
+  const requests = useRequestStore((s) => s.requests);
+  const currentUser = useUserStore((s) => s.currentUser);
+  const updateRequestStatus = useRequestStore((s) => s.updateRequestStatus);
+  const updateRequest = useRequestStore((s) => s.updateRequest);
+  const users = useUserStore((s) => s.users);
+  const priorities = useAdminStore((s) => s.priorities);
+  const attributes = useAdminStore((s) => s.attributes);
+  const addToast = useToastStore((s) => s.addToast);
   const request = requests.find(r => r.id === id);
 
   const [comment, setComment] = useState('');

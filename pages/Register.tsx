@@ -1,13 +1,16 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useStore, useToast } from '../store';
+import { useUserStore, useInviteStore, useToastStore } from '../stores';
 import { Role } from '../types';
 import { CheckCircle, AlertTriangle, XCircle } from 'lucide-react';
 
 export const Register: React.FC = () => {
   const navigate = useNavigate();
-  const { setCurrentUser, addUser, validateInviteToken, markInviteTokenUsed } = useStore();
-  const { addToast } = useToast();
+  const setCurrentUser = useUserStore((s) => s.setCurrentUser);
+  const addUser = useUserStore((s) => s.addUser);
+  const validateInviteToken = useInviteStore((s) => s.validateInviteToken);
+  const markInviteTokenUsed = useInviteStore((s) => s.markInviteTokenUsed);
+  const addToast = useToastStore((s) => s.addToast);
 
   const urlToken = useMemo(() => {
     const params = new URLSearchParams(window.location.search);

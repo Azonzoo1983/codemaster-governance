@@ -1,24 +1,22 @@
 import React, { useState, useMemo } from 'react';
-import { useStore, useToast } from '../store';
+import { useAdminStore, useUserStore, useInviteStore, useToastStore } from '../stores';
 import { AttributeDefinition, AttributeType, Priority, Role } from '../types';
 import { Trash2, Plus, Edit, Link, Copy, Users, Mail, Shield, Clock, CheckCircle, XCircle, Send } from 'lucide-react';
 
 export const Admin: React.FC = () => {
-  const {
-    attributes,
-    priorities,
-    users,
-    inviteTokens,
-    updateAttribute,
-    addAttribute,
-    deleteAttribute,
-    updatePriority,
-    addPriority,
-    deletePriority,
-    createInviteToken,
-    updateUserRole,
-  } = useStore();
-  const { addToast } = useToast();
+  const attributes = useAdminStore((s) => s.attributes);
+  const priorities = useAdminStore((s) => s.priorities);
+  const updateAttribute = useAdminStore((s) => s.updateAttribute);
+  const addAttribute = useAdminStore((s) => s.addAttribute);
+  const deleteAttribute = useAdminStore((s) => s.deleteAttribute);
+  const updatePriority = useAdminStore((s) => s.updatePriority);
+  const addPriority = useAdminStore((s) => s.addPriority);
+  const deletePriority = useAdminStore((s) => s.deletePriority);
+  const users = useUserStore((s) => s.users);
+  const updateUserRole = useUserStore((s) => s.updateUserRole);
+  const inviteTokens = useInviteStore((s) => s.inviteTokens);
+  const createInviteToken = useInviteStore((s) => s.createInviteToken);
+  const addToast = useToastStore((s) => s.addToast);
   const [activeTab, setActiveTab] = useState<'attributes' | 'priorities' | 'users' | 'invites'>('attributes');
 
   const [editingAttr, setEditingAttr] = useState<Partial<AttributeDefinition> | null>(null);

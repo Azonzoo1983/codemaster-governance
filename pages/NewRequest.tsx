@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useStore, useToast } from '../store';
+import { useUserStore, useAdminStore, useRequestStore, useToastStore } from '../stores';
 import { Classification, MaterialSubType, ServiceSubType, RequestStatus, RequestItem, AttributeType } from '../types';
 import { DynamicForm } from '../components/DynamicForm';
 import { ArrowLeft, ArrowRight, Send, Info, AlertTriangle, CheckCircle, Paperclip, X, FileText, Eye } from 'lucide-react';
@@ -13,8 +13,14 @@ const SERVICE_UOM_OPTIONS = ['Days', 'Hours', 'Lumpsum', 'Each', 'Monthly', 'Wee
 export const NewRequest: React.FC = () => {
   const navigate = useNavigate();
   const { id: requestId } = useParams();
-  const { currentUser, priorities, attributes, addRequest, updateRequest, requests, users } = useStore();
-  const { addToast } = useToast();
+  const currentUser = useUserStore((s) => s.currentUser);
+  const priorities = useAdminStore((s) => s.priorities);
+  const attributes = useAdminStore((s) => s.attributes);
+  const addRequest = useRequestStore((s) => s.addRequest);
+  const updateRequest = useRequestStore((s) => s.updateRequest);
+  const requests = useRequestStore((s) => s.requests);
+  const users = useUserStore((s) => s.users);
+  const addToast = useToastStore((s) => s.addToast);
 
   const [step, setStep] = useState(1);
   const [dbChecked, setDbChecked] = useState(false);

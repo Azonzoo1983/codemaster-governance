@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useStore } from '../store';
+import { useRequestStore, useUserStore, useAdminStore } from '../stores';
 import { RequestStatus, Role, RequestItem, Classification } from '../types';
 import { Clock, CheckCircle, AlertCircle, FileText, ArrowRight, RotateCcw, Filter, Search, ChevronLeft, ChevronRight, ArrowUpDown, AlertTriangle } from 'lucide-react';
 
@@ -8,7 +8,10 @@ const PAGE_SIZE = 15;
 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
-  const { requests, currentUser, priorities, users } = useStore();
+  const requests = useRequestStore((s) => s.requests);
+  const currentUser = useUserStore((s) => s.currentUser);
+  const priorities = useAdminStore((s) => s.priorities);
+  const users = useUserStore((s) => s.users);
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterPriority, setFilterPriority] = useState<string>('all');
   const [filterClassification, setFilterClassification] = useState<string>('all');

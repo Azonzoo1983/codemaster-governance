@@ -1,15 +1,52 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useStore } from '../store';
+import { useRequestStore, useAdminStore, useUserStore } from '../stores';
 import { RequestStatus, Role } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
-import { ArrowLeft, TrendingUp, Users, Clock, Target } from 'lucide-react';
+import { ArrowLeft, TrendingUp, Users, Clock, Target, Download, FileText, Calendar } from 'lucide-react';
+import { exportToCsv } from '../lib/exportCsv';
+import { exportToPdf } from '../lib/exportPdf';
 
 const COLORS = ['#2563eb', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316', '#84cc16'];
 
 export const Reports: React.FC = () => {
   const navigate = useNavigate();
-  const { requests, priorities, users } = useStore();
+  const allRequests = useRequestStore((s) => s.requests);
+  const priorities = useAdminStore((s) => s.priorities);
+  const users = useUserStore((s) => s.users);
+
+  // Date range filter
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+
+  const requests = useMemo(() => {
+    if (!dateFrom && !dateTo) return allRequests;
+    return allRequests.filter((r) => {
+      const d = new Date(r.createdAt);
+      if (dateFrom && d < new Date(dateFrom)) return false;
+      if (dateTo && d > new Date(dateTo + 'T23:59:59')) return false;
+      return true;
+    });
+  }, [allRequests, dateFrom, dateTo]);
+
+  // Export handlers
+  const handleExportCsv = () => {
+    const data = requests.map((r) => ({
+      ID: r.id,
+      Title: r.title,
+      Classification: r.classification,
+      Status: r.status,
+      Priority: priorities.find((p) => p.id === r.priorityId)?.name || '',
+      Requester: users.find((u) => u.id === r.requesterId)?.name || '',
+      Created: new Date(r.createdAt).toLocaleDateString(),
+      Updated: new Date(r.updatedAt).toLocaleDateString(),
+    }));
+    exportToCsv(data, `codemaster-report-${new Date().toISOString().slice(0, 10)}`);
+  };
+
+  const handleExportPdf = () => {
+    exportToPdf('reports-content', `codemaster-report-${new Date().toISOString().slice(0, 10)}`);
+  };
 
   // Status Distribution
   const statusData = useMemo(() => {
@@ -93,12 +130,67 @@ export const Reports: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <button onClick={() => navigate('/')} className="p-2 hover:bg-slate-200 rounded-full transition"><ArrowLeft size={20} strokeWidth={1.75} /></button>
-        <h2 className="text-2xl font-bold text-slate-800 tracking-tight">Performance Reports</h2>
+      <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+        <div className="flex items-center gap-4 flex-1">
+          <button onClick={() => navigate('/')} className="p-2 hover:bg-slate-200 rounded-full transition"><ArrowLeft size={20} strokeWidth={1.75} /></button>
+          <h2 className="text-2xl font-bold text-slate-800 tracking-tight">Performance Reports</h2>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleExportCsv}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition"
+          >
+            <Download size={14} strokeWidth={1.75} /> CSV
+          </button>
+          <button
+            onClick={handleExportPdf}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition"
+          >
+            <FileText size={14} strokeWidth={1.75} /> PDF
+          </button>
+        </div>
+      </div>
+
+      {/* Date Range Filter */}
+      <div className="bg-white p-4 rounded-xl shadow-premium border border-slate-200/60 flex flex-wrap items-center gap-4">
+        <div className="flex items-center gap-2 text-sm text-slate-600">
+          <Calendar size={16} strokeWidth={1.75} className="text-slate-400" />
+          <span className="font-medium">Filter by date:</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+            className="px-3 py-1.5 text-sm border border-slate-300 rounded-lg focus:border-blue-500 focus:ring-blue-500/20 transition"
+            aria-label="From date"
+          />
+          <span className="text-slate-400 text-sm">to</span>
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+            className="px-3 py-1.5 text-sm border border-slate-300 rounded-lg focus:border-blue-500 focus:ring-blue-500/20 transition"
+            aria-label="To date"
+          />
+          {(dateFrom || dateTo) && (
+            <button
+              onClick={() => { setDateFrom(''); setDateTo(''); }}
+              className="text-xs text-blue-600 hover:text-blue-800 font-medium transition"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+        {(dateFrom || dateTo) && (
+          <span className="text-xs text-slate-500">
+            Showing {requests.length} of {allRequests.length} requests
+          </span>
+        )}
       </div>
 
       {/* Summary Cards */}
+      <div id="reports-content" className="space-y-6">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-white p-5 rounded-xl shadow-premium border border-slate-200/60 card-accent-left">
           <div className="flex items-center gap-2 text-slate-500 text-xs font-semibold uppercase tracking-wide mb-2"><TrendingUp size={16} strokeWidth={1.75} /> Total Requests</div>
@@ -230,6 +322,7 @@ export const Reports: React.FC = () => {
           </div>
         </div>
       )}
+      </div>{/* end reports-content */}
     </div>
   );
 };

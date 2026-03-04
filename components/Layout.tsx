@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { useStore } from '../store';
+import { useUserStore } from '../stores';
+import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
+import { KeyboardShortcutHelp } from './KeyboardShortcutHelp';
 import { Role } from '../types';
 import {
   LayoutDashboard,
@@ -9,7 +11,8 @@ import {
   User as UserIcon,
   Menu,
   X,
-  BarChart2
+  BarChart2,
+  Keyboard,
 } from 'lucide-react';
 
 const menuItems = [
@@ -20,10 +23,13 @@ const menuItems = [
 ];
 
 export const Layout: React.FC = () => {
-  const { currentUser, users, setCurrentUser } = useStore();
+  const currentUser = useUserStore((s) => s.currentUser);
+  const users = useUserStore((s) => s.users);
+  const setCurrentUser = useUserStore((s) => s.setCurrentUser);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const { showHelp, setShowHelp } = useKeyboardShortcuts();
 
   const filteredMenu = menuItems.filter(item => item.roles.includes(currentUser.role));
 
@@ -86,8 +92,18 @@ export const Layout: React.FC = () => {
           ))}
         </nav>
 
-        {/* Role Switcher for Demo */}
+        {/* Keyboard Shortcut Hint + Role Switcher */}
         <div className="p-4 border-t border-slate-700/50 bg-slate-900/80 backdrop-blur-sm">
+          <button
+            onClick={() => setShowHelp(true)}
+            className="w-full flex items-center gap-2 text-slate-400 hover:text-slate-200 text-xs mb-3 transition"
+            aria-label="Show keyboard shortcuts"
+          >
+            <Keyboard size={14} strokeWidth={1.75} />
+            <span>Keyboard shortcuts</span>
+            <kbd className="ml-auto text-[10px] px-1.5 py-0.5 bg-slate-700 rounded border border-slate-600">?</kbd>
+          </button>
+
           <div className="text-[10px] text-slate-500 mb-2 uppercase font-semibold tracking-widest">Demo: Switch Role</div>
           <select
             className="w-full bg-slate-800 border border-slate-600 text-xs rounded-lg p-2 text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 transition-all"
@@ -120,6 +136,9 @@ export const Layout: React.FC = () => {
           <Outlet />
         </div>
       </main>
+
+      {/* Keyboard Shortcuts Help Modal */}
+      <KeyboardShortcutHelp isOpen={showHelp} onClose={() => setShowHelp(false)} />
     </div>
   );
 };
