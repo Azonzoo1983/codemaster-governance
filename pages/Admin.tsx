@@ -16,6 +16,8 @@ export const Admin: React.FC = () => {
   const users = useUserStore((s) => s.users);
   const updateUserRole = useUserStore((s) => s.updateUserRole);
   const updateUser = useUserStore((s) => s.updateUser);
+  const deleteUser = useUserStore((s) => s.deleteUser);
+  const currentUser = useUserStore((s) => s.currentUser);
   const inviteTokens = useInviteStore((s) => s.inviteTokens);
   const createInviteToken = useInviteStore((s) => s.createInviteToken);
   const addToast = useToastStore((s) => s.addToast);
@@ -24,8 +26,9 @@ export const Admin: React.FC = () => {
   const [editingAttr, setEditingAttr] = useState<Partial<AttributeDefinition> | null>(null);
   const [editingPrio, setEditingPrio] = useState<Partial<Priority> | null>(null);
 
-  // User editing state
+  // User editing & delete state
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [confirmDeleteUserId, setConfirmDeleteUserId] = useState<string | null>(null);
   const [editUserName, setEditUserName] = useState('');
   const [editUserEmail, setEditUserEmail] = useState('');
   const [editUserDept, setEditUserDept] = useState('');
@@ -594,14 +597,43 @@ export const Admin: React.FC = () => {
                             </select>
                           </td>
                           <td className="p-3">
-                            <button
-                              onClick={() => startEditUser(u)}
-                              className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition"
-                              title="Edit user details"
-                              aria-label={`Edit ${u.name}`}
-                            >
-                              <Pencil size={15} strokeWidth={1.75} />
-                            </button>
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => startEditUser(u)}
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition"
+                                title="Edit user details"
+                                aria-label={`Edit ${u.name}`}
+                              >
+                                <Pencil size={15} strokeWidth={1.75} />
+                              </button>
+                              {confirmDeleteUserId === u.id ? (
+                                <>
+                                  <button
+                                    onClick={() => { deleteUser(u.id); setConfirmDeleteUserId(null); }}
+                                    className="p-1.5 rounded-lg bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50 transition text-xs font-semibold"
+                                    title="Confirm delete"
+                                  >
+                                    <Check size={14} strokeWidth={2.5} />
+                                  </button>
+                                  <button
+                                    onClick={() => setConfirmDeleteUserId(null)}
+                                    className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600 transition"
+                                    title="Cancel"
+                                  >
+                                    <X size={14} strokeWidth={2} />
+                                  </button>
+                                </>
+                              ) : (
+                                <button
+                                  onClick={() => u.id === currentUser.id ? addToast('Cannot delete the active user.', 'warning') : setConfirmDeleteUserId(u.id)}
+                                  className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 transition"
+                                  title="Delete user"
+                                  aria-label={`Delete ${u.name}`}
+                                >
+                                  <Trash2 size={15} strokeWidth={1.75} />
+                                </button>
+                              )}
+                            </div>
                           </td>
                         </>
                       )}

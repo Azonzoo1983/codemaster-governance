@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { User, Role, MOCK_USERS } from '../types';
-import { upsertRecord, TABLES } from '../lib/supabase';
+import { upsertRecord, deleteRecord, TABLES } from '../lib/supabase';
 import { useToastStore } from './toastStore';
 
 // --- localStorage fallback for currentUserId (session-specific) ---
@@ -37,6 +37,7 @@ interface UserState {
   addUser: (userData: Omit<User, 'id'>) => User;
   updateUserRole: (userId: string, role: Role) => void;
   updateUser: (userId: string, updates: Partial<Omit<User, 'id'>>) => void;
+  deleteUser: (userId: string) => void;
   resolveCurrentUser: (allUsers: User[]) => void;
 }
 
@@ -89,6 +90,25 @@ export const useUserStore = create<UserState>((set, get) => ({
         }
       });
     }
+  },
+
+  deleteUser: (userId) => {
+    const addToast = useToastStore.getState().addToast;
+    const current = get().currentUser;
+    if (current.id === userId) {
+      addToast('Cannot delete the currently active user.', 'warning');
+      return;
+    }
+    const prev = get().users;
+    set((state) => ({ users: state.users.filter((u) => u.id !== userId) }));
+    deleteRecord(TABLES.users, userId).then((result) => {
+      if (result.success) {
+        addToast('User deleted.', 'success');
+      } else {
+        set({ users: prev });
+        addToast(`Failed to delete user: ${result.error}`, 'error');
+      }
+    });
   },
 
   updateUser: (userId, updates) => {
