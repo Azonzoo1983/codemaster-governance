@@ -7,4 +7,6 @@ export { useRequestStore } from './requestStore';
 export { useInviteStore } from './inviteStore';
 export { useSettingsStore } from './settingsStore';
 export type { Theme } from './settingsStore';
+export { useLayoutStore } from './layoutStore';
+export type { DashboardWidget } from './layoutStore';
 export { useInitializeStores } from './initializeStores';

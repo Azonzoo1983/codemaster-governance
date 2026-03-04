@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useAdminStore, useUserStore, useInviteStore, useToastStore } from '../stores';
 import { AttributeDefinition, AttributeType, Priority, Role } from '../types';
 import { Trash2, Plus, Edit, Link, Copy, Users, Mail, Shield, Clock, CheckCircle, XCircle, Send } from 'lucide-react';
+import { EmailNotificationSettings } from '../components/EmailNotificationSettings';
 
 export const Admin: React.FC = () => {
   const attributes = useAdminStore((s) => s.attributes);
@@ -17,7 +18,7 @@ export const Admin: React.FC = () => {
   const inviteTokens = useInviteStore((s) => s.inviteTokens);
   const createInviteToken = useInviteStore((s) => s.createInviteToken);
   const addToast = useToastStore((s) => s.addToast);
-  const [activeTab, setActiveTab] = useState<'attributes' | 'priorities' | 'users' | 'invites'>('attributes');
+  const [activeTab, setActiveTab] = useState<'attributes' | 'priorities' | 'users' | 'invites' | 'emails'>('attributes');
 
   const [editingAttr, setEditingAttr] = useState<Partial<AttributeDefinition> | null>(null);
   const [editingPrio, setEditingPrio] = useState<Partial<Priority> | null>(null);
@@ -161,6 +162,7 @@ export const Admin: React.FC = () => {
     { key: 'priorities' as const, label: 'Priorities' },
     { key: 'users' as const, label: 'User Management' },
     { key: 'invites' as const, label: 'Invitations' },
+    { key: 'emails' as const, label: 'Email Notifications' },
   ];
 
   const roleOptions = Object.values(Role);
@@ -663,6 +665,13 @@ export const Admin: React.FC = () => {
               </table>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* --- EMAIL NOTIFICATIONS TAB --- */}
+      {activeTab === 'emails' && (
+        <div role="tabpanel" id="tabpanel-emails" aria-labelledby="tab-emails" tabIndex={0} className="space-y-6">
+          <EmailNotificationSettings />
         </div>
       )}
     </div>

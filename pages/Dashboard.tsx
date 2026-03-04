@@ -1,11 +1,14 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useRequestStore, useUserStore, useAdminStore } from '../stores';
+import { useRequestStore, useUserStore, useAdminStore, useLayoutStore } from '../stores';
 import { RequestStatus, Role, RequestItem, Classification } from '../types';
 import { calculateBusinessHours } from '../lib/businessHours';
 import { useToastStore } from '../stores';
-import { Clock, CheckCircle, AlertCircle, FileText, ArrowRight, RotateCcw, Filter, Search, ChevronLeft, ChevronRight, ArrowUpDown, AlertTriangle, UserPlus, XCircle, Columns, TrendingUp, Users as UsersIcon, BarChart2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Clock, CheckCircle, AlertCircle, FileText, ArrowRight, RotateCcw, Filter, Search, ChevronLeft, ChevronRight, ArrowUpDown, AlertTriangle, UserPlus, XCircle, Columns, TrendingUp, Users as UsersIcon, BarChart2, ChevronDown, ChevronUp, FileSpreadsheet, LayoutGrid, FileDown } from 'lucide-react';
+import { exportRequestsToExcel } from '../lib/exportExcel';
+import { exportBatchPdf } from '../lib/exportBatchPdf';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, ResponsiveContainer, LineChart, Line, Area, AreaChart } from 'recharts';
+import { DashboardLayoutEditor } from '../components/DashboardLayoutEditor';
 
 const PAGE_SIZE = 15;
 const ANALYTICS_COLORS = ['#2563eb', '#f59e0b', '#ef4444', '#10b981', '#8b5cf6'];
@@ -15,6 +18,7 @@ export const Dashboard: React.FC = () => {
   const requests = useRequestStore((s) => s.requests);
   const currentUser = useUserStore((s) => s.currentUser);
   const priorities = useAdminStore((s) => s.priorities);
+  const attributes = useAdminStore((s) => s.attributes);
   const users = useUserStore((s) => s.users);
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterPriority, setFilterPriority] = useState<string>('all');
@@ -28,6 +32,16 @@ export const Dashboard: React.FC = () => {
   const updateRequest = useRequestStore((s) => s.updateRequest);
   const addToast = useToastStore((s) => s.addToast);
   const [showAnalytics, setShowAnalytics] = useState(false);
+  const [showLayoutEditor, setShowLayoutEditor] = useState(false);
+
+  // Layout store
+  const layoutWidgets = useLayoutStore((s) => s.widgets);
+  const compactMode = useLayoutStore((s) => s.compactMode);
+  const sortedLayoutWidgets = useMemo(
+    () => [...layoutWidgets].sort((a, b) => a.order - b.order),
+    [layoutWidgets]
+  );
+  const isWidgetVisible = (id: string) => layoutWidgets.find((w) => w.id === id)?.visible ?? true;
 
   // Column visibility
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(
@@ -280,150 +294,187 @@ export const Dashboard: React.FC = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">Dashboard</h2>
-        {(currentUser.role === Role.REQUESTER || currentUser.role === Role.ADMIN) && (
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <button
+              onClick={() => setShowLayoutEditor((prev) => !prev)}
+              className="p-2 text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-slate-700 dark:hover:text-slate-200 transition"
+              aria-label="Customize dashboard layout"
+              title="Customize"
+            >
+              <LayoutGrid size={18} strokeWidth={1.75} />
+            </button>
+            <DashboardLayoutEditor isOpen={showLayoutEditor} onClose={() => setShowLayoutEditor(false)} />
+          </div>
           <button
-            onClick={() => navigate('/requests/new')}
-            className="btn-primary text-white px-5 py-2.5 rounded-lg flex items-center gap-2 font-medium text-sm shadow-sm"
+            onClick={() => exportRequestsToExcel(filteredRequests, priorities, users)}
+            className="p-2 text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-slate-700 dark:hover:text-slate-200 transition"
+            aria-label="Export filtered requests to Excel"
+            title="Export to Excel"
           >
-            <FileText size={18} />
-            Create Request
+            <FileSpreadsheet size={18} strokeWidth={1.75} />
           </button>
-        )}
-      </div>
-
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-premium border border-slate-200/60 dark:border-slate-700/60 card-accent-left hover:shadow-premium-md transition-shadow duration-200" role="status" aria-label={`Active requests: ${kpis.active}`}>
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 icon-container icon-container-blue"><Clock size={22} strokeWidth={1.75} /></div>
-            <div>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wide">Active</p>
-              <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">{kpis.active}</p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-premium border border-slate-200/60 dark:border-slate-700/60 card-accent-left hover:shadow-premium-md transition-shadow duration-200" role="status" aria-label={`Completed requests: ${kpis.completed}`}>
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 icon-container icon-container-emerald"><CheckCircle size={22} strokeWidth={1.75} /></div>
-            <div>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wide">Completed</p>
-              <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">{kpis.completed}</p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-premium border border-slate-200/60 dark:border-slate-700/60 card-accent-left hover:shadow-premium-md transition-shadow duration-200" role="status" aria-label={`Attention requests: ${kpis.attention}`}>
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 icon-container icon-container-rose"><AlertCircle size={22} strokeWidth={1.75} /></div>
-            <div>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wide">Attention</p>
-              <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">{kpis.attention}</p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-premium border border-slate-200/60 dark:border-slate-700/60 card-accent-left hover:shadow-premium-md transition-shadow duration-200" role="status" aria-label={`SLA breached requests: ${kpis.breached}`}>
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 icon-container icon-container-amber"><AlertTriangle size={22} strokeWidth={1.75} /></div>
-            <div>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wide">SLA Breached</p>
-              <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">{kpis.breached}</p>
-            </div>
-          </div>
+          {(currentUser.role === Role.REQUESTER || currentUser.role === Role.ADMIN) && (
+            <button
+              onClick={() => navigate('/requests/new')}
+              className="btn-primary text-white px-5 py-2.5 rounded-lg flex items-center gap-2 font-medium text-sm shadow-sm"
+            >
+              <FileText size={18} />
+              Create Request
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Analytics Toggle */}
-      <div className="flex items-center">
-        <button
-          onClick={() => setShowAnalytics(!showAnalytics)}
-          className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200/60 dark:border-slate-700/60 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-          aria-expanded={showAnalytics}
-          aria-controls="analytics-panel"
-        >
-          <BarChart2 size={16} />
-          Analytics
-          {showAnalytics ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-        </button>
-      </div>
+      {/* Dashboard Widgets - rendered in user-configured order */}
+      {sortedLayoutWidgets.map((widget) => {
+        if (!widget.visible) return null;
 
-      {/* Analytics Widgets */}
-      {showAnalytics && (
-        <div id="analytics-panel" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-fadeIn">
-          {/* Widget 1: Requests Over Time */}
-          <div className="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-premium border border-slate-200/60 dark:border-slate-700/60">
-            <div className="flex items-center gap-2 mb-4">
-              <TrendingUp size={16} className="text-blue-600 dark:text-blue-400" />
-              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Requests Trend (30 days)</h3>
-            </div>
-            <ResponsiveContainer width="100%" height={200}>
-              <AreaChart data={trendData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#94a3b8' }} interval="preserveStartEnd" />
-                <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} allowDecimals={false} />
-                <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '8px', color: '#f1f5f9', fontSize: '12px' }} />
-                <Area type="monotone" dataKey="count" stroke="#2563eb" fill="#2563eb" fillOpacity={0.15} strokeWidth={2} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* Widget 2: Specialist Workload */}
-          <div className="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-premium border border-slate-200/60 dark:border-slate-700/60">
-            <div className="flex items-center gap-2 mb-4">
-              <UsersIcon size={16} className="text-blue-600 dark:text-blue-400" />
-              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Specialist Workload</h3>
-            </div>
-            {workloadData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={workloadData} layout="vertical" margin={{ left: 10 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis type="number" tick={{ fontSize: 10, fill: '#94a3b8' }} allowDecimals={false} />
-                  <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: '#94a3b8' }} width={60} />
-                  <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '8px', color: '#f1f5f9', fontSize: '12px' }} />
-                  <Bar dataKey="active" fill="#2563eb" radius={[0, 4, 4, 0]} barSize={20} />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="flex items-center justify-center h-[200px] text-slate-400 dark:text-slate-500 text-sm">
-                No active specialist assignments
+        if (widget.id === 'kpi-cards') {
+          return (
+            <div key={widget.id} className={`grid grid-cols-2 md:grid-cols-4 ${compactMode ? 'gap-2' : 'gap-4'}`}>
+              <div className={`bg-white dark:bg-slate-800 ${compactMode ? 'p-3' : 'p-5'} rounded-xl shadow-premium border border-slate-200/60 dark:border-slate-700/60 card-accent-left hover:shadow-premium-md transition-shadow duration-200`} role="status" aria-label={`Active requests: ${kpis.active}`}>
+                <div className="flex items-center gap-3">
+                  <div className={`${compactMode ? 'p-1.5' : 'p-2.5'} icon-container icon-container-blue`}><Clock size={compactMode ? 18 : 22} strokeWidth={1.75} /></div>
+                  <div>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wide">Active</p>
+                    <p className={`${compactMode ? 'text-xl' : 'text-2xl'} font-bold text-slate-900 dark:text-slate-100`}>{kpis.active}</p>
+                  </div>
+                </div>
               </div>
-            )}
-          </div>
-
-          {/* Widget 3: Priority Distribution */}
-          <div className="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-premium border border-slate-200/60 dark:border-slate-700/60">
-            <div className="flex items-center gap-2 mb-4">
-              <BarChart2 size={16} className="text-blue-600 dark:text-blue-400" />
-              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">By Priority</h3>
-            </div>
-            {priorityDistData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={200}>
-                <PieChart>
-                  <Pie
-                    data={priorityDistData}
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={70}
-                    innerRadius={35}
-                    dataKey="value"
-                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                    labelLine={false}
-                    fontSize={10}
-                  >
-                    {priorityDistData.map((_, index) => (
-                      <Cell key={`cell-${index}`} fill={ANALYTICS_COLORS[index % ANALYTICS_COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '8px', color: '#f1f5f9', fontSize: '12px' }} />
-                </PieChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="flex items-center justify-center h-[200px] text-slate-400 dark:text-slate-500 text-sm">
-                No request data available
+              <div className={`bg-white dark:bg-slate-800 ${compactMode ? 'p-3' : 'p-5'} rounded-xl shadow-premium border border-slate-200/60 dark:border-slate-700/60 card-accent-left hover:shadow-premium-md transition-shadow duration-200`} role="status" aria-label={`Completed requests: ${kpis.completed}`}>
+                <div className="flex items-center gap-3">
+                  <div className={`${compactMode ? 'p-1.5' : 'p-2.5'} icon-container icon-container-emerald`}><CheckCircle size={compactMode ? 18 : 22} strokeWidth={1.75} /></div>
+                  <div>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wide">Completed</p>
+                    <p className={`${compactMode ? 'text-xl' : 'text-2xl'} font-bold text-slate-900 dark:text-slate-100`}>{kpis.completed}</p>
+                  </div>
+                </div>
               </div>
-            )}
-          </div>
-        </div>
-      )}
+              <div className={`bg-white dark:bg-slate-800 ${compactMode ? 'p-3' : 'p-5'} rounded-xl shadow-premium border border-slate-200/60 dark:border-slate-700/60 card-accent-left hover:shadow-premium-md transition-shadow duration-200`} role="status" aria-label={`Attention requests: ${kpis.attention}`}>
+                <div className="flex items-center gap-3">
+                  <div className={`${compactMode ? 'p-1.5' : 'p-2.5'} icon-container icon-container-rose`}><AlertCircle size={compactMode ? 18 : 22} strokeWidth={1.75} /></div>
+                  <div>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wide">Attention</p>
+                    <p className={`${compactMode ? 'text-xl' : 'text-2xl'} font-bold text-slate-900 dark:text-slate-100`}>{kpis.attention}</p>
+                  </div>
+                </div>
+              </div>
+              <div className={`bg-white dark:bg-slate-800 ${compactMode ? 'p-3' : 'p-5'} rounded-xl shadow-premium border border-slate-200/60 dark:border-slate-700/60 card-accent-left hover:shadow-premium-md transition-shadow duration-200`} role="status" aria-label={`SLA breached requests: ${kpis.breached}`}>
+                <div className="flex items-center gap-3">
+                  <div className={`${compactMode ? 'p-1.5' : 'p-2.5'} icon-container icon-container-amber`}><AlertTriangle size={compactMode ? 18 : 22} strokeWidth={1.75} /></div>
+                  <div>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wide">SLA Breached</p>
+                    <p className={`${compactMode ? 'text-xl' : 'text-2xl'} font-bold text-slate-900 dark:text-slate-100`}>{kpis.breached}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        }
 
+        if (widget.id === 'analytics') {
+          return (
+            <React.Fragment key={widget.id}>
+              {/* Analytics Toggle */}
+              <div className="flex items-center">
+                <button
+                  onClick={() => setShowAnalytics(!showAnalytics)}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200/60 dark:border-slate-700/60 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                  aria-expanded={showAnalytics}
+                  aria-controls="analytics-panel"
+                >
+                  <BarChart2 size={16} />
+                  Analytics
+                  {showAnalytics ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                </button>
+              </div>
+
+              {/* Analytics Widgets */}
+              {showAnalytics && (
+                <div id="analytics-panel" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-fadeIn">
+                  {/* Widget 1: Requests Over Time */}
+                  <div className="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-premium border border-slate-200/60 dark:border-slate-700/60">
+                    <div className="flex items-center gap-2 mb-4">
+                      <TrendingUp size={16} className="text-blue-600 dark:text-blue-400" />
+                      <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Requests Trend (30 days)</h3>
+                    </div>
+                    <ResponsiveContainer width="100%" height={200}>
+                      <AreaChart data={trendData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                        <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#94a3b8' }} interval="preserveStartEnd" />
+                        <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} allowDecimals={false} />
+                        <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '8px', color: '#f1f5f9', fontSize: '12px' }} />
+                        <Area type="monotone" dataKey="count" stroke="#2563eb" fill="#2563eb" fillOpacity={0.15} strokeWidth={2} />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  {/* Widget 2: Specialist Workload */}
+                  <div className="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-premium border border-slate-200/60 dark:border-slate-700/60">
+                    <div className="flex items-center gap-2 mb-4">
+                      <UsersIcon size={16} className="text-blue-600 dark:text-blue-400" />
+                      <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Specialist Workload</h3>
+                    </div>
+                    {workloadData.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={200}>
+                        <BarChart data={workloadData} layout="vertical" margin={{ left: 10 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                          <XAxis type="number" tick={{ fontSize: 10, fill: '#94a3b8' }} allowDecimals={false} />
+                          <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: '#94a3b8' }} width={60} />
+                          <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '8px', color: '#f1f5f9', fontSize: '12px' }} />
+                          <Bar dataKey="active" fill="#2563eb" radius={[0, 4, 4, 0]} barSize={20} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="flex items-center justify-center h-[200px] text-slate-400 dark:text-slate-500 text-sm">
+                        No active specialist assignments
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Widget 3: Priority Distribution */}
+                  <div className="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-premium border border-slate-200/60 dark:border-slate-700/60">
+                    <div className="flex items-center gap-2 mb-4">
+                      <BarChart2 size={16} className="text-blue-600 dark:text-blue-400" />
+                      <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">By Priority</h3>
+                    </div>
+                    {priorityDistData.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={200}>
+                        <PieChart>
+                          <Pie
+                            data={priorityDistData}
+                            cx="50%"
+                            cy="50%"
+                            outerRadius={70}
+                            innerRadius={35}
+                            dataKey="value"
+                            label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                            labelLine={false}
+                            fontSize={10}
+                          >
+                            {priorityDistData.map((_, index) => (
+                              <Cell key={`cell-${index}`} fill={ANALYTICS_COLORS[index % ANALYTICS_COLORS.length]} />
+                            ))}
+                          </Pie>
+                          <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '8px', color: '#f1f5f9', fontSize: '12px' }} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="flex items-center justify-center h-[200px] text-slate-400 dark:text-slate-500 text-sm">
+                        No request data available
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </React.Fragment>
+          );
+        }
+
+        if (widget.id === 'request-table') {
+          return (
+            <React.Fragment key={widget.id}>
       {/* Request Table */}
       <div className="bg-white dark:bg-slate-800 rounded-xl shadow-premium border border-slate-200/60 dark:border-slate-700/60 overflow-hidden">
         {/* Filters Bar */}
@@ -682,6 +733,12 @@ export const Dashboard: React.FC = () => {
           </div>
         )}
       </div>
+            </React.Fragment>
+          );
+        }
+
+        return null;
+      })}
 
       {/* Bulk Action Toolbar */}
       {canBulkAction && selectedIds.size > 0 && (
@@ -711,6 +768,17 @@ export const Dashboard: React.FC = () => {
               </button>
             </div>
           )}
+
+          <button
+            onClick={() => {
+              const selected = requests.filter(r => selectedIds.has(r.id));
+              exportBatchPdf(selected, priorities, users, attributes);
+            }}
+            className="flex items-center gap-1 text-xs bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded-lg font-medium transition"
+            aria-label="Export selected requests as batch PDF"
+          >
+            <FileDown size={14} /> Batch PDF
+          </button>
 
           <button
             onClick={clearSelection}

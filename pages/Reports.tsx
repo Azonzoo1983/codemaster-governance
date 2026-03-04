@@ -4,9 +4,11 @@ import { useRequestStore, useAdminStore, useUserStore } from '../stores';
 import { RequestStatus, Role } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { calculateBusinessHours } from '../lib/businessHours';
-import { ArrowLeft, TrendingUp, Users, Clock, Target, Download, FileText, Calendar } from 'lucide-react';
+import { ArrowLeft, TrendingUp, Users, Clock, Target, Download, FileText, Calendar, FileSpreadsheet, FileDown } from 'lucide-react';
 import { exportToCsv } from '../lib/exportCsv';
 import { exportToPdf } from '../lib/exportPdf';
+import { exportRequestsToExcel } from '../lib/exportExcel';
+import { exportAuditTrailPdf } from '../lib/exportBatchPdf';
 
 const COLORS = ['#2563eb', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316', '#84cc16'];
 
@@ -47,6 +49,14 @@ export const Reports: React.FC = () => {
 
   const handleExportPdf = () => {
     exportToPdf('reports-content', `codemaster-report-${new Date().toISOString().slice(0, 10)}`);
+  };
+
+  const handleExportExcel = () => {
+    exportRequestsToExcel(requests, priorities, users, `codemaster-report-${new Date().toISOString().slice(0, 10)}`);
+  };
+
+  const handleExportAuditTrailPdf = () => {
+    exportAuditTrailPdf(allRequests, users);
   };
 
   // Status Distribution
@@ -149,6 +159,20 @@ export const Reports: React.FC = () => {
             aria-label="Export report as PDF"
           >
             <FileText size={14} strokeWidth={1.75} /> PDF
+          </button>
+          <button
+            onClick={handleExportExcel}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+            aria-label="Export report as Excel"
+          >
+            <FileSpreadsheet size={14} strokeWidth={1.75} /> Excel
+          </button>
+          <button
+            onClick={handleExportAuditTrailPdf}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+            aria-label="Export audit trail as PDF"
+          >
+            <FileDown size={14} strokeWidth={1.75} /> Audit Trail
           </button>
         </div>
       </div>

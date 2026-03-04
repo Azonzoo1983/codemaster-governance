@@ -1,9 +1,10 @@
 import { create } from 'zustand';
-import { RequestItem, RequestStatus, AuditLog, StageTimestamp } from '../types';
+import { RequestItem, RequestStatus, AuditLog, StageTimestamp, Role } from '../types';
 import { upsertRecord, TABLES } from '../lib/supabase';
 import { useToastStore } from './toastStore';
 import { useUserStore } from './userStore';
 import { generateId } from './userStore';
+import { notifyStatusChange, notifyAssignment, notifyNewRequest } from '../lib/emailNotifications';
 
 // --- Stage Timestamp Helpers ---
 function createStageTimestamp(status: RequestStatus): StageTimestamp {
@@ -76,6 +77,13 @@ export const useRequestStore = create<RequestState>((set, get) => ({
       set({ saving: false });
       if (result.success) {
         addToast(`Request ${newId} created successfully.`, 'success');
+
+        // Fire-and-forget email notification to POC/manager for new requests
+        const users = useUserStore.getState().users;
+        const pocUsers = users.filter(u => u.role === Role.POC);
+        pocUsers.forEach(poc => {
+          notifyNewRequest(newId, reqData.title || 'New Request', poc.email, poc.name, currentUser.name, '').catch(() => {});
+        });
       } else {
         // Rollback optimistic update
         set((state) => ({ requests: state.requests.filter((r) => r.id !== newId) }));
@@ -163,6 +171,23 @@ export const useRequestStore = create<RequestState>((set, get) => ({
       set({ saving: false });
       if (result.success) {
         addToast(`Request ${id} updated to "${status}".`, 'success');
+
+        // Fire-and-forget email notifications
+        const users = useUserStore.getState().users;
+        const requester = users.find(u => u.id === req.requesterId);
+
+        // Notify requester of status changes on their request
+        if (requester && requester.id !== currentUser.id) {
+          notifyStatusChange(id, req.title, requester.email, requester.name, req.status, status).catch(() => {});
+        }
+
+        // Notify specialist when assigned
+        if (status === RequestStatus.ASSIGNED && updates?.assignedSpecialistId) {
+          const specialist = users.find(u => u.id === updates.assignedSpecialistId);
+          if (specialist) {
+            notifyAssignment(id, req.title, specialist.email, specialist.name, specialist.name).catch(() => {});
+          }
+        }
       } else {
         // Rollback
         set({ requests: prevRequests });
