@@ -4,7 +4,8 @@ import { useRequestStore, useUserStore, useAdminStore, useToastStore } from '../
 import { RequestStatus, Role, Classification, ClarificationComment } from '../types';
 import { DynamicForm } from '../components/DynamicForm';
 import { calculateBusinessHours, formatBusinessHours } from '../lib/businessHours';
-import { ArrowLeft, CheckCircle, XCircle, UserPlus, AlertTriangle, FileCheck, Mail, Edit3, RotateCcw, CornerUpLeft, Paperclip, Download, User as UserIcon, MessageSquare, Send, Clock, RefreshCw } from 'lucide-react';
+import { ArrowLeft, CheckCircle, XCircle, UserPlus, AlertTriangle, FileCheck, Mail, Edit3, RotateCcw, CornerUpLeft, Paperclip, Download, User as UserIcon, MessageSquare, Send, Clock, RefreshCw, FileDown } from 'lucide-react';
+import { exportRequestPdf } from '../lib/exportRequestPdf';
 
 export const RequestDetail: React.FC = () => {
   const navigate = useNavigate();
@@ -311,6 +312,13 @@ export const RequestDetail: React.FC = () => {
       {/* Header */}
       <div className="flex items-center gap-4">
         <button onClick={() => navigate('/')} aria-label="Back to dashboard" className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full transition"><ArrowLeft size={20} strokeWidth={1.75} className="text-slate-700 dark:text-slate-300" /></button>
+        <button
+          onClick={() => exportRequestPdf(request, priority, users, attributes)}
+          className="flex items-center gap-2 text-sm px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition shadow-sm"
+          aria-label="Download request as PDF"
+        >
+          <FileDown size={16} /> PDF
+        </button>
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">{request.title}</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">{request.id} &bull; {request.classification} &bull; {request.requestType || 'New'}</p>

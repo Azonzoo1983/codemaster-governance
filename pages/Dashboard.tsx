@@ -4,9 +4,11 @@ import { useRequestStore, useUserStore, useAdminStore } from '../stores';
 import { RequestStatus, Role, RequestItem, Classification } from '../types';
 import { calculateBusinessHours } from '../lib/businessHours';
 import { useToastStore } from '../stores';
-import { Clock, CheckCircle, AlertCircle, FileText, ArrowRight, RotateCcw, Filter, Search, ChevronLeft, ChevronRight, ArrowUpDown, AlertTriangle, UserPlus, XCircle } from 'lucide-react';
+import { Clock, CheckCircle, AlertCircle, FileText, ArrowRight, RotateCcw, Filter, Search, ChevronLeft, ChevronRight, ArrowUpDown, AlertTriangle, UserPlus, XCircle, Columns, TrendingUp, Users as UsersIcon, BarChart2, ChevronDown, ChevronUp } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, ResponsiveContainer, LineChart, Line, Area, AreaChart } from 'recharts';
 
 const PAGE_SIZE = 15;
+const ANALYTICS_COLORS = ['#2563eb', '#f59e0b', '#ef4444', '#10b981', '#8b5cf6'];
 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -25,6 +27,38 @@ export const Dashboard: React.FC = () => {
   const updateRequestStatus = useRequestStore((s) => s.updateRequestStatus);
   const updateRequest = useRequestStore((s) => s.updateRequest);
   const addToast = useToastStore((s) => s.addToast);
+  const [showAnalytics, setShowAnalytics] = useState(false);
+
+  // Column visibility
+  const [visibleColumns, setVisibleColumns] = useState<Set<string>>(
+    new Set(['id', 'priority', 'title', 'classification', 'status', 'specialist', 'created', 'action'])
+  );
+  const [showColumnPicker, setShowColumnPicker] = useState(false);
+
+  const columnDefs = [
+    { key: 'id', label: 'ID' },
+    { key: 'priority', label: 'Priority' },
+    { key: 'title', label: 'Title' },
+    { key: 'classification', label: 'Classification' },
+    { key: 'status', label: 'Status' },
+    { key: 'specialist', label: 'Specialist' },
+    { key: 'created', label: 'Created' },
+    { key: 'action', label: 'Action' },
+  ];
+
+  const toggleColumnVisibility = (key: string) => {
+    if (key === 'title' || key === 'action') return; // Always visible
+    setVisibleColumns(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const resetColumns = () => {
+    setVisibleColumns(new Set(columnDefs.map(c => c.key)));
+  };
 
   // Bulk selection
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -208,6 +242,40 @@ export const Dashboard: React.FC = () => {
     };
   }, [requests, currentUser, priorities]);
 
+  // Analytics: Requests trend over last 30 days
+  const trendData = useMemo(() => {
+    const days = 30;
+    const now = new Date();
+    const data = [];
+    for (let i = days - 1; i >= 0; i--) {
+      const date = new Date(now);
+      date.setDate(date.getDate() - i);
+      const dateStr = date.toISOString().slice(0, 10);
+      const count = requests.filter(r => r.createdAt.slice(0, 10) === dateStr).length;
+      data.push({ date: date.toLocaleDateString('en', { month: 'short', day: 'numeric' }), count });
+    }
+    return data;
+  }, [requests]);
+
+  // Analytics: Workload by specialist
+  const workloadData = useMemo(() => {
+    const specs = users.filter(u => u.role === Role.SPECIALIST);
+    return specs.map(s => ({
+      name: s.name.split(' ')[0],
+      active: requests.filter(r => r.assignedSpecialistId === s.id && r.status !== RequestStatus.COMPLETED && r.status !== RequestStatus.REJECTED).length,
+    })).filter(s => s.active > 0);
+  }, [requests, users]);
+
+  // Analytics: Priority distribution
+  const priorityDistData = useMemo(() => {
+    const counts: Record<string, number> = {};
+    requests.forEach(r => {
+      const pName = priorities.find(p => p.id === r.priorityId)?.name || 'Unknown';
+      counts[pName] = (counts[pName] || 0) + 1;
+    });
+    return Object.entries(counts).map(([name, value]) => ({ name, value }));
+  }, [requests, priorities]);
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -263,6 +331,99 @@ export const Dashboard: React.FC = () => {
         </div>
       </div>
 
+      {/* Analytics Toggle */}
+      <div className="flex items-center">
+        <button
+          onClick={() => setShowAnalytics(!showAnalytics)}
+          className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200/60 dark:border-slate-700/60 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+          aria-expanded={showAnalytics}
+          aria-controls="analytics-panel"
+        >
+          <BarChart2 size={16} />
+          Analytics
+          {showAnalytics ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+        </button>
+      </div>
+
+      {/* Analytics Widgets */}
+      {showAnalytics && (
+        <div id="analytics-panel" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-fadeIn">
+          {/* Widget 1: Requests Over Time */}
+          <div className="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-premium border border-slate-200/60 dark:border-slate-700/60">
+            <div className="flex items-center gap-2 mb-4">
+              <TrendingUp size={16} className="text-blue-600 dark:text-blue-400" />
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Requests Trend (30 days)</h3>
+            </div>
+            <ResponsiveContainer width="100%" height={200}>
+              <AreaChart data={trendData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#94a3b8' }} interval="preserveStartEnd" />
+                <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} allowDecimals={false} />
+                <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '8px', color: '#f1f5f9', fontSize: '12px' }} />
+                <Area type="monotone" dataKey="count" stroke="#2563eb" fill="#2563eb" fillOpacity={0.15} strokeWidth={2} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Widget 2: Specialist Workload */}
+          <div className="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-premium border border-slate-200/60 dark:border-slate-700/60">
+            <div className="flex items-center gap-2 mb-4">
+              <UsersIcon size={16} className="text-blue-600 dark:text-blue-400" />
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Specialist Workload</h3>
+            </div>
+            {workloadData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={workloadData} layout="vertical" margin={{ left: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis type="number" tick={{ fontSize: 10, fill: '#94a3b8' }} allowDecimals={false} />
+                  <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: '#94a3b8' }} width={60} />
+                  <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '8px', color: '#f1f5f9', fontSize: '12px' }} />
+                  <Bar dataKey="active" fill="#2563eb" radius={[0, 4, 4, 0]} barSize={20} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-[200px] text-slate-400 dark:text-slate-500 text-sm">
+                No active specialist assignments
+              </div>
+            )}
+          </div>
+
+          {/* Widget 3: Priority Distribution */}
+          <div className="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-premium border border-slate-200/60 dark:border-slate-700/60">
+            <div className="flex items-center gap-2 mb-4">
+              <BarChart2 size={16} className="text-blue-600 dark:text-blue-400" />
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">By Priority</h3>
+            </div>
+            {priorityDistData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={200}>
+                <PieChart>
+                  <Pie
+                    data={priorityDistData}
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={70}
+                    innerRadius={35}
+                    dataKey="value"
+                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                    labelLine={false}
+                    fontSize={10}
+                  >
+                    {priorityDistData.map((_, index) => (
+                      <Cell key={`cell-${index}`} fill={ANALYTICS_COLORS[index % ANALYTICS_COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '8px', color: '#f1f5f9', fontSize: '12px' }} />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-[200px] text-slate-400 dark:text-slate-500 text-sm">
+                No request data available
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Request Table */}
       <div className="bg-white dark:bg-slate-800 rounded-xl shadow-premium border border-slate-200/60 dark:border-slate-700/60 overflow-hidden">
         {/* Filters Bar */}
@@ -306,6 +467,54 @@ export const Dashboard: React.FC = () => {
                   {projectCodes.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               )}
+
+              {/* Column Visibility Toggle */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowColumnPicker(prev => !prev)}
+                  className="flex items-center gap-1.5 text-sm border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-md shadow-sm py-2 px-3 hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors"
+                  aria-label="Toggle column visibility"
+                  aria-expanded={showColumnPicker}
+                >
+                  <Columns size={14} />
+                  <span>Columns</span>
+                </button>
+                {showColumnPicker && (
+                  <>
+                    <div className="fixed inset-0 z-30" onClick={() => setShowColumnPicker(false)} />
+                    <div className="absolute right-0 top-full mt-1 z-40 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg py-2 w-52">
+                      <div className="flex items-center justify-between px-3 pb-2 mb-1 border-b border-slate-100 dark:border-slate-700">
+                        <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Show Columns</span>
+                        <button
+                          onClick={resetColumns}
+                          className="text-xs text-blue-600 dark:text-blue-400 hover:underline font-medium"
+                        >
+                          Reset
+                        </button>
+                      </div>
+                      {columnDefs.map(col => {
+                        const isLocked = col.key === 'title' || col.key === 'action';
+                        return (
+                          <label
+                            key={col.key}
+                            className={`flex items-center gap-2.5 px-3 py-1.5 text-sm cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors ${isLocked ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={visibleColumns.has(col.key)}
+                              onChange={() => toggleColumnVisibility(col.key)}
+                              disabled={isLocked}
+                              className="rounded text-blue-600 focus:ring-blue-500/20 disabled:opacity-50"
+                            />
+                            <span className="text-slate-700 dark:text-slate-300">{col.label}</span>
+                            {isLocked && <span className="text-[10px] text-slate-400 dark:text-slate-500 ml-auto">Required</span>}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </div>
           <div className="text-xs text-slate-400">{sortedRequests.length} request{sortedRequests.length !== 1 ? 's' : ''} found</div>
@@ -327,25 +536,31 @@ export const Dashboard: React.FC = () => {
                     />
                   </th>
                 )}
-                <th scope="col" className="p-3 pl-4">ID</th>
-                <th scope="col" className="p-3 cursor-pointer select-none" onClick={() => toggleSort('priority')} aria-sort={sortField === 'priority' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}>
-                  <span className="flex items-center gap-1">Priority <ArrowUpDown size={12} /></span>
-                </th>
-                <th scope="col" className="p-3">Title</th>
-                <th scope="col" className="p-3">Classification</th>
-                <th scope="col" className="p-3 cursor-pointer select-none" onClick={() => toggleSort('status')} aria-sort={sortField === 'status' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}>
-                  <span className="flex items-center gap-1">Status <ArrowUpDown size={12} /></span>
-                </th>
-                <th scope="col" className="p-3">Specialist</th>
-                <th scope="col" className="p-3 cursor-pointer select-none" onClick={() => toggleSort('createdAt')} aria-sort={sortField === 'createdAt' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}>
-                  <span className="flex items-center gap-1">Created <ArrowUpDown size={12} /></span>
-                </th>
-                <th scope="col" className="p-3 text-right pr-4">Action</th>
+                {visibleColumns.has('id') && <th scope="col" className="p-3 pl-4">ID</th>}
+                {visibleColumns.has('priority') && (
+                  <th scope="col" className="p-3 cursor-pointer select-none" onClick={() => toggleSort('priority')} aria-sort={sortField === 'priority' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                    <span className="flex items-center gap-1">Priority <ArrowUpDown size={12} /></span>
+                  </th>
+                )}
+                {visibleColumns.has('title') && <th scope="col" className="p-3">Title</th>}
+                {visibleColumns.has('classification') && <th scope="col" className="p-3">Classification</th>}
+                {visibleColumns.has('status') && (
+                  <th scope="col" className="p-3 cursor-pointer select-none" onClick={() => toggleSort('status')} aria-sort={sortField === 'status' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                    <span className="flex items-center gap-1">Status <ArrowUpDown size={12} /></span>
+                  </th>
+                )}
+                {visibleColumns.has('specialist') && <th scope="col" className="p-3">Specialist</th>}
+                {visibleColumns.has('created') && (
+                  <th scope="col" className="p-3 cursor-pointer select-none" onClick={() => toggleSort('createdAt')} aria-sort={sortField === 'createdAt' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                    <span className="flex items-center gap-1">Created <ArrowUpDown size={12} /></span>
+                  </th>
+                )}
+                {visibleColumns.has('action') && <th scope="col" className="p-3 text-right pr-4">Action</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
               {paginatedRequests.length === 0 ? (
-                <tr><td colSpan={canBulkAction ? 9 : 8} className="p-12 text-center" role="status">
+                <tr><td colSpan={visibleColumns.size + (canBulkAction ? 1 : 0)} className="p-12 text-center" role="status">
                   <FileText size={32} className="mx-auto text-slate-300 dark:text-slate-600 mb-3" />
                   <p className="text-slate-500 dark:text-slate-400 font-medium">No requests found</p>
                   <p className="text-slate-400 dark:text-slate-500 text-xs mt-1">
@@ -387,39 +602,55 @@ export const Dashboard: React.FC = () => {
                           />
                         </td>
                       )}
-                      <td className="p-3 pl-4">
-                        <span className="font-medium text-blue-600 dark:text-blue-400 text-xs font-mono">{req.id}</span>
-                      </td>
-                      <td className="p-3">
-                        <span className={`px-2 py-0.5 rounded text-xs font-bold ${priorityMeta.className}`}>{priorityMeta.name}</span>
-                      </td>
-                      <td className="p-3">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-slate-900 dark:text-slate-100 truncate max-w-[200px]">{req.title}</span>
-                          {slaBadge && (
-                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold shrink-0 ${slaBadge.className}`}>{slaBadge.label}</span>
+                      {visibleColumns.has('id') && (
+                        <td className="p-3 pl-4">
+                          <span className="font-medium text-blue-600 dark:text-blue-400 text-xs font-mono">{req.id}</span>
+                        </td>
+                      )}
+                      {visibleColumns.has('priority') && (
+                        <td className="p-3">
+                          <span className={`px-2 py-0.5 rounded text-xs font-bold ${priorityMeta.className}`}>{priorityMeta.name}</span>
+                        </td>
+                      )}
+                      {visibleColumns.has('title') && (
+                        <td className="p-3">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-slate-900 dark:text-slate-100 truncate max-w-[200px]">{req.title}</span>
+                            {slaBadge && (
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold shrink-0 ${slaBadge.className}`}>{slaBadge.label}</span>
+                            )}
+                          </div>
+                        </td>
+                      )}
+                      {visibleColumns.has('classification') && (
+                        <td className="p-3">
+                          <span className="badge-refined bg-slate-50 text-slate-600 ring-1 ring-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:ring-slate-600">{req.classification}</span>
+                        </td>
+                      )}
+                      {visibleColumns.has('status') && (
+                        <td className="p-3">
+                          <span className={`badge-refined ${getStatusColor(req.status)}`}>{req.status}</span>
+                        </td>
+                      )}
+                      {visibleColumns.has('specialist') && (
+                        <td className="p-3 text-xs text-slate-500 dark:text-slate-400">{getSpecialistName(req.assignedSpecialistId)}</td>
+                      )}
+                      {visibleColumns.has('created') && (
+                        <td className="p-3 text-slate-500 dark:text-slate-400 text-xs">{new Date(req.createdAt).toLocaleDateString()}</td>
+                      )}
+                      {visibleColumns.has('action') && (
+                        <td className="p-3 text-right pr-4">
+                          {isRequesterAttention ? (
+                            <button onClick={() => navigate(`/requests/${req.id}/edit`)} className="bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-3 py-1 rounded-md text-xs font-bold hover:bg-blue-100 dark:hover:bg-blue-900/50 flex items-center gap-1 ml-auto border border-blue-200/60 dark:border-blue-700/60">
+                              Modify <RotateCcw size={12} />
+                            </button>
+                          ) : (
+                            <button onClick={() => navigate(`/requests/${req.id}`)} className="text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 font-medium flex items-center gap-1 justify-end w-full text-xs transition-colors">
+                              View <ArrowRight size={14} />
+                            </button>
                           )}
-                        </div>
-                      </td>
-                      <td className="p-3">
-                        <span className="badge-refined bg-slate-50 text-slate-600 ring-1 ring-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:ring-slate-600">{req.classification}</span>
-                      </td>
-                      <td className="p-3">
-                        <span className={`badge-refined ${getStatusColor(req.status)}`}>{req.status}</span>
-                      </td>
-                      <td className="p-3 text-xs text-slate-500 dark:text-slate-400">{getSpecialistName(req.assignedSpecialistId)}</td>
-                      <td className="p-3 text-slate-500 dark:text-slate-400 text-xs">{new Date(req.createdAt).toLocaleDateString()}</td>
-                      <td className="p-3 text-right pr-4">
-                        {isRequesterAttention ? (
-                          <button onClick={() => navigate(`/requests/${req.id}/edit`)} className="bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-3 py-1 rounded-md text-xs font-bold hover:bg-blue-100 dark:hover:bg-blue-900/50 flex items-center gap-1 ml-auto border border-blue-200/60 dark:border-blue-700/60">
-                            Modify <RotateCcw size={12} />
-                          </button>
-                        ) : (
-                          <button onClick={() => navigate(`/requests/${req.id}`)} className="text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 font-medium flex items-center gap-1 justify-end w-full text-xs transition-colors">
-                            View <ArrowRight size={14} />
-                          </button>
-                        )}
-                      </td>
+                        </td>
+                      )}
                     </tr>
                   );
                 })

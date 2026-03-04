@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useUserStore, useSettingsStore } from '../stores';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
+import { useRealtimeNotifications } from '../hooks/useRealtimeNotifications';
 import { KeyboardShortcutHelp } from './KeyboardShortcutHelp';
+import { NotificationBell } from './NotificationBell';
 import { Role } from '../types';
 import type { Theme } from '../stores';
 import {
@@ -13,16 +15,20 @@ import {
   Menu,
   X,
   BarChart2,
+  Activity,
   Keyboard,
   Sun,
   Moon,
   Monitor,
+  GitBranch,
 } from 'lucide-react';
 
 const menuItems = [
   { path: '/', label: 'Dashboard', icon: <LayoutDashboard size={20} strokeWidth={1.75} />, roles: Object.values(Role) },
   { path: '/requests/new', label: 'New Request', icon: <PlusCircle size={20} strokeWidth={1.75} />, roles: [Role.REQUESTER, Role.ADMIN] },
   { path: '/reports', label: 'Reports', icon: <BarChart2 size={20} strokeWidth={1.75} />, roles: [Role.ADMIN, Role.MANAGER, Role.POC, Role.SPECIALIST, Role.TECHNICAL_REVIEWER] },
+  { path: '/activity', label: 'Activity Feed', icon: <Activity size={20} strokeWidth={1.75} />, roles: Object.values(Role) },
+  { path: '/workflow', label: 'Workflow Builder', icon: <GitBranch size={20} strokeWidth={1.75} />, roles: [Role.ADMIN] },
   { path: '/admin', label: 'Admin Panel', icon: <Settings size={20} strokeWidth={1.75} />, roles: [Role.ADMIN] },
 ];
 
@@ -42,6 +48,9 @@ export const Layout: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { showHelp, setShowHelp } = useKeyboardShortcuts();
+
+  // Enable real-time notifications
+  useRealtimeNotifications(currentUser.id, true);
 
   const filteredMenu = menuItems.filter(item => item.roles.includes(currentUser.role));
 
@@ -173,6 +182,7 @@ export const Layout: React.FC = () => {
               <div className="truncate font-medium text-white">{currentUser.name}</div>
               <div className="truncate text-xs text-slate-400">{currentUser.role}</div>
             </div>
+            <NotificationBell />
           </div>
         </div>
       </aside>

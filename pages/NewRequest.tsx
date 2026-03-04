@@ -3,9 +3,10 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useUserStore, useAdminStore, useRequestStore, useToastStore } from '../stores';
 import { Classification, MaterialSubType, ServiceSubType, RequestStatus, RequestItem, AttributeType } from '../types';
 import { DynamicForm } from '../components/DynamicForm';
-import { ArrowLeft, ArrowRight, Send, Info, AlertTriangle, CheckCircle, Paperclip, X, FileText, Eye } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Send, Info, AlertTriangle, CheckCircle, Paperclip, X, FileText, Eye, Upload, Loader2 } from 'lucide-react';
+import { uploadFile, validateFile, formatFileSize } from '../lib/fileUpload';
 
-const MAX_ATTACHMENT_SIZE = 500_000; // 500KB
+const MAX_ATTACHMENT_SIZE = 10_000_000; // 10MB (upgraded with Supabase Storage)
 const TOTAL_STEPS = 4;
 
 const SERVICE_UOM_OPTIONS = ['Days', 'Hours', 'Lumpsum', 'Each', 'Monthly', 'Weekly', 'Per Visit', 'Per Unit'];
@@ -230,32 +231,40 @@ export const NewRequest: React.FC = () => {
     navigate('/');
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const [uploading, setUploading] = useState(false);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > MAX_ATTACHMENT_SIZE) {
-      addToast(`File too large. Maximum size is ${MAX_ATTACHMENT_SIZE / 1000}KB.`, 'warning');
+    const validation = validateFile(file);
+    if (!validation.valid) {
+      addToast(validation.error || 'Invalid file.', 'warning');
+      e.target.value = '';
       return;
     }
 
-    const reader = new FileReader();
-    reader.onloadend = () => {
+    setUploading(true);
+    try {
+      const result = await uploadFile(file, currentUser.id);
       const newAttachment = {
         id: crypto.getRandomValues(new Uint32Array(1))[0].toString(36),
         name: file.name,
         type: file.type,
         size: file.size,
-        url: reader.result as string
+        url: result.url,
       };
       setFormData(prev => ({
         ...prev,
         attachments: [...(prev.attachments || []), newAttachment]
       }));
-      addToast(`${file.name} attached.`, 'info');
-    };
-    reader.readAsDataURL(file);
-    e.target.value = '';
+      addToast(`${file.name} uploaded (${formatFileSize(file.size)}).`, 'info');
+    } catch (err: any) {
+      addToast(`Upload failed: ${err.message || 'Unknown error'}`, 'error');
+    } finally {
+      setUploading(false);
+      e.target.value = '';
+    }
   };
 
   const stepLabels = ['Database Check', 'Classification', 'Details & Attributes', 'Priority & Review'];
@@ -601,12 +610,12 @@ export const NewRequest: React.FC = () => {
                 <Paperclip size={14} strokeWidth={1.75} /> Attachments
               </h4>
               <div className="flex items-center gap-4">
-                <label className="cursor-pointer bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 px-4 py-2.5 rounded-lg flex items-center gap-2 transition border border-slate-200/60 dark:border-slate-600">
-                  <FileText size={16} strokeWidth={1.75} />
-                  <span className="text-sm font-medium">Choose File</span>
-                  <input type="file" className="hidden" accept="image/*,.pdf" onChange={handleFileUpload} aria-label="Attach file" />
+                <label className={`${uploading ? 'opacity-50 pointer-events-none' : 'cursor-pointer'} bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 px-4 py-2.5 rounded-lg flex items-center gap-2 transition border border-slate-200/60 dark:border-slate-600`}>
+                  {uploading ? <Loader2 size={16} strokeWidth={1.75} className="animate-spin" /> : <Upload size={16} strokeWidth={1.75} />}
+                  <span className="text-sm font-medium">{uploading ? 'Uploading...' : 'Choose File'}</span>
+                  <input type="file" className="hidden" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt" onChange={handleFileUpload} disabled={uploading} aria-label="Attach file" />
                 </label>
-                <span className="text-xs text-slate-500 dark:text-slate-400">Max 500KB per file (Images, PDF)</span>
+                <span className="text-xs text-slate-500 dark:text-slate-400">Max 10MB per file (Images, PDF, Office, CSV)</span>
               </div>
 
               {formData.attachments && formData.attachments.length > 0 && (
@@ -616,7 +625,7 @@ export const NewRequest: React.FC = () => {
                       <div className="flex items-center gap-2 overflow-hidden">
                         <FileText size={14} className="text-slate-400 dark:text-slate-500 shrink-0" />
                         <span className="truncate max-w-[200px] text-slate-700 dark:text-slate-300">{att.name}</span>
-                        <span className="text-xs text-slate-400 dark:text-slate-500">({Math.round(att.size / 1024)} KB)</span>
+                        <span className="text-xs text-slate-400 dark:text-slate-500">({formatFileSize(att.size)})</span>
                       </div>
                       <button
                         onClick={() => setFormData(prev => ({ ...prev, attachments: prev.attachments?.filter(a => a.id !== att.id) }))}

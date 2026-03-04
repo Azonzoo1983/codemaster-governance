@@ -9,6 +9,8 @@ import { NewRequest } from './pages/NewRequest';
 import { RequestDetail } from './pages/RequestDetail';
 import { Admin } from './pages/Admin';
 import { Reports } from './pages/Reports';
+import { ActivityFeed } from './pages/ActivityFeed';
+import { WorkflowBuilder } from './pages/WorkflowBuilder';
 import { Register } from './pages/Register';
 
 const LoadingScreen: React.FC = () => (
@@ -39,6 +41,8 @@ const AppRoutes: React.FC = () => {
         <Route path="/requests/:id" element={<RequestDetail />} />
         <Route path="/admin" element={<Admin />} />
         <Route path="/reports" element={<Reports />} />
+        <Route path="/activity" element={<ActivityFeed />} />
+        <Route path="/workflow" element={<WorkflowBuilder />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
