@@ -36,6 +36,7 @@ interface UserState {
   setCurrentUser: (user: User) => void;
   addUser: (userData: Omit<User, 'id'>) => User;
   updateUserRole: (userId: string, role: Role) => void;
+  updateUser: (userId: string, updates: Partial<Omit<User, 'id'>>) => void;
   resolveCurrentUser: (allUsers: User[]) => void;
 }
 
@@ -85,6 +86,34 @@ export const useUserStore = create<UserState>((set, get) => ({
         } else {
           set({ users: prev });
           addToast(`Failed to update role: ${result.error}`, 'error');
+        }
+      });
+    }
+  },
+
+  updateUser: (userId, updates) => {
+    const addToast = useToastStore.getState().addToast;
+    const prev = get().users;
+    const updated = prev.map((u) => (u.id === userId ? { ...u, ...updates } : u));
+    set({ users: updated });
+
+    // Also update currentUser if it's the same user
+    const current = get().currentUser;
+    if (current.id === userId) {
+      set({ currentUser: { ...current, ...updates } });
+    }
+
+    const user = updated.find((u) => u.id === userId);
+    if (user) {
+      upsertRecord(TABLES.users, user).then((result) => {
+        if (result.success) {
+          addToast('User details updated.', 'success');
+        } else {
+          set({ users: prev });
+          if (current.id === userId) {
+            set({ currentUser: current });
+          }
+          addToast(`Failed to update user: ${result.error}`, 'error');
         }
       });
     }

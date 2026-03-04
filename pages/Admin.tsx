@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useAdminStore, useUserStore, useInviteStore, useToastStore } from '../stores';
 import { AttributeDefinition, AttributeType, Priority, Role } from '../types';
-import { Trash2, Plus, Edit, Link, Copy, Users, Mail, Shield, Clock, CheckCircle, XCircle, Send } from 'lucide-react';
+import { Trash2, Plus, Edit, Link, Copy, Users, Mail, Shield, Clock, CheckCircle, XCircle, Send, Check, X, Pencil } from 'lucide-react';
 import { EmailNotificationSettings } from '../components/EmailNotificationSettings';
 
 export const Admin: React.FC = () => {
@@ -15,6 +15,7 @@ export const Admin: React.FC = () => {
   const deletePriority = useAdminStore((s) => s.deletePriority);
   const users = useUserStore((s) => s.users);
   const updateUserRole = useUserStore((s) => s.updateUserRole);
+  const updateUser = useUserStore((s) => s.updateUser);
   const inviteTokens = useInviteStore((s) => s.inviteTokens);
   const createInviteToken = useInviteStore((s) => s.createInviteToken);
   const addToast = useToastStore((s) => s.addToast);
@@ -22,6 +23,41 @@ export const Admin: React.FC = () => {
 
   const [editingAttr, setEditingAttr] = useState<Partial<AttributeDefinition> | null>(null);
   const [editingPrio, setEditingPrio] = useState<Partial<Priority> | null>(null);
+
+  // User editing state
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [editUserName, setEditUserName] = useState('');
+  const [editUserEmail, setEditUserEmail] = useState('');
+  const [editUserDept, setEditUserDept] = useState('');
+
+  const startEditUser = (u: { id: string; name: string; email: string; department: string }) => {
+    setEditingUserId(u.id);
+    setEditUserName(u.name);
+    setEditUserEmail(u.email);
+    setEditUserDept(u.department);
+  };
+
+  const saveEditUser = () => {
+    if (!editingUserId) return;
+    if (!editUserName.trim()) {
+      addToast('Name is required.', 'warning');
+      return;
+    }
+    if (!editUserEmail.trim() || !editUserEmail.includes('@')) {
+      addToast('A valid email is required.', 'warning');
+      return;
+    }
+    updateUser(editingUserId, {
+      name: editUserName.trim(),
+      email: editUserEmail.trim(),
+      department: editUserDept.trim(),
+    });
+    setEditingUserId(null);
+  };
+
+  const cancelEditUser = () => {
+    setEditingUserId(null);
+  };
 
   // Invite form state
   const [inviteEmail, setInviteEmail] = useState('');
@@ -466,32 +502,114 @@ export const Admin: React.FC = () => {
                     <th scope="col" className="p-3 text-xs uppercase tracking-wider">Department</th>
                     <th scope="col" className="p-3 text-xs uppercase tracking-wider">Project</th>
                     <th scope="col" className="p-3 text-xs uppercase tracking-wider">Role</th>
+                    <th scope="col" className="p-3 text-xs uppercase tracking-wider w-24">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
                   {users.map(u => (
                     <tr key={u.id} className="table-row-hover">
-                      <td className="p-3 font-medium text-slate-900 dark:text-slate-100">{u.name}</td>
-                      <td className="p-3 text-slate-500 dark:text-slate-400">{u.email}</td>
-                      <td className="p-3 text-slate-500 dark:text-slate-400">{u.department}</td>
-                      <td className="p-3 text-slate-500 dark:text-slate-400">{u.projectName || u.projectNumber || '-'}</td>
-                      <td className="p-3">
-                        <select
-                          aria-label={`Role for ${u.name}`}
-                          className="text-xs font-medium px-2 py-1 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500/20 focus:border-blue-500 transition"
-                          value={u.role}
-                          onChange={e => updateUserRole(u.id, e.target.value as Role)}
-                        >
-                          {roleOptions.map(r => (
-                            <option key={r} value={r}>{r}</option>
-                          ))}
-                        </select>
-                      </td>
+                      {editingUserId === u.id ? (
+                        <>
+                          <td className="p-2">
+                            <input
+                              type="text"
+                              aria-label="Edit name"
+                              className="w-full px-2 py-1.5 text-sm border border-blue-300 dark:border-blue-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition"
+                              value={editUserName}
+                              onChange={e => setEditUserName(e.target.value)}
+                              onKeyDown={e => { if (e.key === 'Enter') saveEditUser(); if (e.key === 'Escape') cancelEditUser(); }}
+                              autoFocus
+                            />
+                          </td>
+                          <td className="p-2">
+                            <input
+                              type="email"
+                              aria-label="Edit email"
+                              className="w-full px-2 py-1.5 text-sm border border-blue-300 dark:border-blue-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition"
+                              value={editUserEmail}
+                              onChange={e => setEditUserEmail(e.target.value)}
+                              onKeyDown={e => { if (e.key === 'Enter') saveEditUser(); if (e.key === 'Escape') cancelEditUser(); }}
+                            />
+                          </td>
+                          <td className="p-2">
+                            <input
+                              type="text"
+                              aria-label="Edit department"
+                              className="w-full px-2 py-1.5 text-sm border border-blue-300 dark:border-blue-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition"
+                              value={editUserDept}
+                              onChange={e => setEditUserDept(e.target.value)}
+                              onKeyDown={e => { if (e.key === 'Enter') saveEditUser(); if (e.key === 'Escape') cancelEditUser(); }}
+                            />
+                          </td>
+                          <td className="p-3 text-slate-500 dark:text-slate-400">{u.projectName || u.projectNumber || '-'}</td>
+                          <td className="p-3">
+                            <select
+                              aria-label={`Role for ${u.name}`}
+                              className="text-xs font-medium px-2 py-1 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500/20 focus:border-blue-500 transition"
+                              value={u.role}
+                              onChange={e => updateUserRole(u.id, e.target.value as Role)}
+                            >
+                              {roleOptions.map(r => (
+                                <option key={r} value={r}>{r}</option>
+                              ))}
+                            </select>
+                          </td>
+                          <td className="p-2">
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={saveEditUser}
+                                className="p-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition"
+                                title="Save changes"
+                                aria-label="Save user changes"
+                              >
+                                <Check size={15} strokeWidth={2.5} />
+                              </button>
+                              <button
+                                onClick={cancelEditUser}
+                                className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600 transition"
+                                title="Cancel editing"
+                                aria-label="Cancel editing"
+                              >
+                                <X size={15} strokeWidth={2} />
+                              </button>
+                            </div>
+                          </td>
+                        </>
+                      ) : (
+                        <>
+                          <td className="p-3 font-medium text-slate-900 dark:text-slate-100">{u.name}</td>
+                          <td className="p-3 text-slate-500 dark:text-slate-400">{u.email}</td>
+                          <td className="p-3 text-slate-500 dark:text-slate-400">{u.department}</td>
+                          <td className="p-3 text-slate-500 dark:text-slate-400">{u.projectName || u.projectNumber || '-'}</td>
+                          <td className="p-3">
+                            <select
+                              aria-label={`Role for ${u.name}`}
+                              className="text-xs font-medium px-2 py-1 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500/20 focus:border-blue-500 transition"
+                              value={u.role}
+                              onChange={e => updateUserRole(u.id, e.target.value as Role)}
+                            >
+                              {roleOptions.map(r => (
+                                <option key={r} value={r}>{r}</option>
+                              ))}
+                            </select>
+                          </td>
+                          <td className="p-3">
+                            <button
+                              onClick={() => startEditUser(u)}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition"
+                              title="Edit user details"
+                              aria-label={`Edit ${u.name}`}
+                            >
+                              <Pencil size={15} strokeWidth={1.75} />
+                            </button>
+                          </td>
+                        </>
+                      )}
                     </tr>
                   ))}
                   {users.length === 0 && (
                     <tr>
-                      <td colSpan={5} className="p-8 text-center text-slate-400">No users registered yet.</td>
+                      <td colSpan={6} className="p-8 text-center text-slate-400">No users registered yet.</td>
                     </tr>
                   )}
                 </tbody>
