@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useRequestStore, useUserStore } from '../stores';
 import { Activity, Clock, ArrowLeft, CheckCircle, XCircle, UserPlus, AlertTriangle, FileText, RefreshCw, Filter } from 'lucide-react';
+import { EmptyState } from '../components/EmptyState';
 
 // --- Types ---
 interface FeedEntry {
@@ -256,15 +257,16 @@ export const ActivityFeed: React.FC = () => {
       {/* Timeline */}
       <div className="bg-white dark:bg-slate-800 rounded-xl shadow-premium border border-slate-200/60 dark:border-slate-700/60 overflow-hidden">
         {visibleEntries.length === 0 ? (
-          <div className="p-12 text-center">
-            <Activity size={40} strokeWidth={1.5} className="mx-auto text-slate-300 dark:text-slate-600 mb-3" />
-            <p className="text-slate-500 dark:text-slate-400 font-medium">No activity found</p>
-            <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">
-              {actionFilter !== 'All' || timeRange !== 'All'
+          <EmptyState
+            icon={<Activity size={40} strokeWidth={1.5} />}
+            title="No activity found"
+            description={
+              actionFilter !== 'All' || timeRange !== 'All'
                 ? 'Try adjusting your filters to see more results.'
-                : 'Activity will appear here as requests are created and updated.'}
-            </p>
-          </div>
+                : 'Activity will appear here as requests are created and updated.'
+            }
+            size="md"
+          />
         ) : (
           <div className="divide-y divide-slate-100 dark:divide-slate-700/60">
             {visibleEntries.map((entry, idx) => (

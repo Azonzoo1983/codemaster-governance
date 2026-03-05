@@ -1,42 +1,17 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAdminStore, useToastStore } from '../stores';
+import { useAdminStore, useToastStore, useWorkflowStore } from '../stores';
 import { RequestStatus } from '../types';
+import type { WorkflowConfig } from '../stores/workflowStore';
 import {
   ArrowLeft, Plus, Trash2, GripVertical, Save, RotateCcw,
   ArrowRight, CheckCircle, XCircle, AlertTriangle, Clock,
   ChevronDown, ChevronUp, Settings, Zap, Users,
 } from 'lucide-react';
 
-// --- Types ---
-interface WorkflowNode {
-  id: string;
-  status: RequestStatus;
-  label: string;
-  color: string;
-  icon: 'clock' | 'check' | 'x' | 'alert' | 'users' | 'zap' | 'settings';
-  autoAssign?: boolean;
-  requiresApproval?: boolean;
-  notifyRoles?: string[];
-  slaMultiplier?: number;
-  description?: string;
-}
-
-interface WorkflowEdge {
-  id: string;
-  from: string; // node id
-  to: string;   // node id
-  condition?: string;
-  label?: string;
-}
-
-interface WorkflowConfig {
-  id: string;
-  name: string;
-  nodes: WorkflowNode[];
-  edges: WorkflowEdge[];
-  isDefault: boolean;
-}
+// Derived types from the store config
+type WorkflowNode = WorkflowConfig['nodes'][number];
+type WorkflowEdge = WorkflowConfig['edges'][number];
 
 // Icon helper
 const NodeIcon: React.FC<{ icon: WorkflowNode['icon']; size?: number }> = ({ icon, size = 16 }) => {
@@ -51,43 +26,12 @@ const NodeIcon: React.FC<{ icon: WorkflowNode['icon']; size?: number }> = ({ ico
   }
 };
 
-// Default workflow from the existing status enum
-const DEFAULT_WORKFLOW: WorkflowConfig = {
-  id: 'default',
-  name: 'Standard Approval Workflow',
-  nodes: [
-    { id: 'n1', status: RequestStatus.DRAFT, label: 'Draft', color: 'bg-slate-400', icon: 'clock', description: 'Request created by requester' },
-    { id: 'n2', status: RequestStatus.PENDING_APPROVAL, label: 'Manager Approval', color: 'bg-yellow-500', icon: 'users', requiresApproval: true, description: 'Waiting for manager approval (Critical priority only)' },
-    { id: 'n3', status: RequestStatus.SUBMITTED_TO_POC, label: 'POC Review', color: 'bg-blue-500', icon: 'zap', description: 'POC assigns to specialist' },
-    { id: 'n4', status: RequestStatus.ASSIGNED, label: 'Assigned', color: 'bg-indigo-500', icon: 'users', autoAssign: false, description: 'Specialist assigned to request' },
-    { id: 'n5', status: RequestStatus.UNDER_SPECIALIST_REVIEW, label: 'Specialist Review', color: 'bg-violet-500', icon: 'settings', description: 'Specialist analyzes and codes the item/service' },
-    { id: 'n6', status: RequestStatus.UNDER_TECHNICAL_VALIDATION, label: 'Technical Validation', color: 'bg-cyan-500', icon: 'check', description: 'Technical reviewer validates the coding' },
-    { id: 'n7', status: RequestStatus.PENDING_ORACLE_CREATION, label: 'Oracle Creation', color: 'bg-teal-500', icon: 'zap', description: 'Final code creation in Oracle ERP' },
-    { id: 'n8', status: RequestStatus.COMPLETED, label: 'Completed', color: 'bg-emerald-500', icon: 'check', description: 'Request fulfilled with final code' },
-    { id: 'n9', status: RequestStatus.REJECTED, label: 'Rejected', color: 'bg-rose-500', icon: 'x', description: 'Request rejected at any stage' },
-    { id: 'n10', status: RequestStatus.RETURNED_FOR_CLARIFICATION, label: 'Clarification', color: 'bg-amber-500', icon: 'alert', description: 'Additional information needed from requester' },
-  ],
-  edges: [
-    { id: 'e1', from: 'n1', to: 'n2', label: 'Submit (Critical)', condition: 'priority === Critical' },
-    { id: 'e2', from: 'n1', to: 'n3', label: 'Submit (Normal/Urgent)', condition: 'priority !== Critical' },
-    { id: 'e3', from: 'n2', to: 'n3', label: 'Approved' },
-    { id: 'e4', from: 'n2', to: 'n9', label: 'Rejected' },
-    { id: 'e5', from: 'n3', to: 'n4', label: 'Assign Specialist' },
-    { id: 'e6', from: 'n4', to: 'n5', label: 'Begin Review' },
-    { id: 'e7', from: 'n5', to: 'n6', label: 'Submit for Validation' },
-    { id: 'e8', from: 'n5', to: 'n10', label: 'Need Clarification' },
-    { id: 'e9', from: 'n6', to: 'n7', label: 'Validated' },
-    { id: 'e10', from: 'n6', to: 'n10', label: 'Need Clarification' },
-    { id: 'e11', from: 'n7', to: 'n8', label: 'Code Created' },
-    { id: 'e12', from: 'n10', to: 'n5', label: 'Clarified' },
-  ],
-  isDefault: true,
-};
-
 export const WorkflowBuilder: React.FC = () => {
   const navigate = useNavigate();
   const addToast = useToastStore((s) => s.addToast);
-  const [workflow, setWorkflow] = useState<WorkflowConfig>(DEFAULT_WORKFLOW);
+  const workflow = useWorkflowStore((s) => s.workflow);
+  const setWorkflow = useWorkflowStore((s) => s.setWorkflow);
+  const resetWorkflow = useWorkflowStore((s) => s.resetWorkflow);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [draggedNodeId, setDraggedNodeId] = useState<string | null>(null);
@@ -103,27 +47,27 @@ export const WorkflowBuilder: React.FC = () => {
     workflow.edges.filter(e => e.to === nodeId), [workflow.edges]);
 
   // Update node
-  const updateNode = (nodeId: string, updates: Partial<WorkflowNode>) => {
-    setWorkflow(prev => ({
-      ...prev,
-      nodes: prev.nodes.map(n => n.id === nodeId ? { ...n, ...updates } : n),
-    }));
+  const updateNode = (nodeId: string, updates: Partial<WorkflowConfig['nodes'][number]>) => {
+    setWorkflow({
+      ...workflow,
+      nodes: workflow.nodes.map(n => n.id === nodeId ? { ...n, ...updates } : n),
+    });
     setHasChanges(true);
   };
 
   // Update edge
-  const updateEdge = (edgeId: string, updates: Partial<WorkflowEdge>) => {
-    setWorkflow(prev => ({
-      ...prev,
-      edges: prev.edges.map(e => e.id === edgeId ? { ...e, ...updates } : e),
-    }));
+  const updateEdge = (edgeId: string, updates: Partial<WorkflowConfig['edges'][number]>) => {
+    setWorkflow({
+      ...workflow,
+      edges: workflow.edges.map(e => e.id === edgeId ? { ...e, ...updates } : e),
+    });
     setHasChanges(true);
   };
 
   // Add node
   const addNode = () => {
     const newId = `n${Date.now()}`;
-    const newNode: WorkflowNode = {
+    const newNode: WorkflowConfig['nodes'][number] = {
       id: newId,
       status: RequestStatus.DRAFT,
       label: 'New Stage',
@@ -131,7 +75,7 @@ export const WorkflowBuilder: React.FC = () => {
       icon: 'clock',
       description: 'New workflow stage',
     };
-    setWorkflow(prev => ({ ...prev, nodes: [...prev.nodes, newNode] }));
+    setWorkflow({ ...workflow, nodes: [...workflow.nodes, newNode] });
     setSelectedNodeId(newId);
     setSelectedEdgeId(null);
     setHasChanges(true);
@@ -139,11 +83,11 @@ export const WorkflowBuilder: React.FC = () => {
 
   // Remove node
   const removeNode = (nodeId: string) => {
-    setWorkflow(prev => ({
-      ...prev,
-      nodes: prev.nodes.filter(n => n.id !== nodeId),
-      edges: prev.edges.filter(e => e.from !== nodeId && e.to !== nodeId),
-    }));
+    setWorkflow({
+      ...workflow,
+      nodes: workflow.nodes.filter(n => n.id !== nodeId),
+      edges: workflow.edges.filter(e => e.from !== nodeId && e.to !== nodeId),
+    });
     if (selectedNodeId === nodeId) setSelectedNodeId(null);
     setHasChanges(true);
   };
@@ -152,38 +96,36 @@ export const WorkflowBuilder: React.FC = () => {
   const addEdge = (fromId: string, toId: string) => {
     const exists = workflow.edges.some(e => e.from === fromId && e.to === toId);
     if (exists) return;
-    const newEdge: WorkflowEdge = {
+    const newEdge: WorkflowConfig['edges'][number] = {
       id: `e${Date.now()}`,
       from: fromId,
       to: toId,
       label: 'Transition',
     };
-    setWorkflow(prev => ({ ...prev, edges: [...prev.edges, newEdge] }));
+    setWorkflow({ ...workflow, edges: [...workflow.edges, newEdge] });
     setHasChanges(true);
   };
 
   // Remove edge
   const removeEdge = (edgeId: string) => {
-    setWorkflow(prev => ({
-      ...prev,
-      edges: prev.edges.filter(e => e.id !== edgeId),
-    }));
+    setWorkflow({
+      ...workflow,
+      edges: workflow.edges.filter(e => e.id !== edgeId),
+    });
     if (selectedEdgeId === edgeId) setSelectedEdgeId(null);
     setHasChanges(true);
   };
 
   // Move node in array (reorder)
   const moveNode = (fromIndex: number, toIndex: number) => {
-    setWorkflow(prev => {
-      const nodes = [...prev.nodes];
-      const [moved] = nodes.splice(fromIndex, 1);
-      nodes.splice(toIndex, 0, moved);
-      return { ...prev, nodes };
-    });
+    const nodes = [...workflow.nodes];
+    const [moved] = nodes.splice(fromIndex, 1);
+    nodes.splice(toIndex, 0, moved);
+    setWorkflow({ ...workflow, nodes });
     setHasChanges(true);
   };
 
-  // Save workflow
+  // Save workflow (already persisted to localStorage via Zustand; mark as saved)
   const handleSave = () => {
     addToast('Workflow saved successfully!', 'success');
     setHasChanges(false);
@@ -191,7 +133,7 @@ export const WorkflowBuilder: React.FC = () => {
 
   // Reset to default
   const handleReset = () => {
-    setWorkflow(DEFAULT_WORKFLOW);
+    resetWorkflow();
     setSelectedNodeId(null);
     setSelectedEdgeId(null);
     setHasChanges(false);

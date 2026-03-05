@@ -14,6 +14,7 @@ const Admin = React.lazy(() => import('./pages/Admin').then(m => ({ default: m.A
 const Reports = React.lazy(() => import('./pages/Reports').then(m => ({ default: m.Reports })));
 const ActivityFeed = React.lazy(() => import('./pages/ActivityFeed').then(m => ({ default: m.ActivityFeed })));
 const WorkflowBuilder = React.lazy(() => import('./pages/WorkflowBuilder').then(m => ({ default: m.WorkflowBuilder })));
+const MyRequests = React.lazy(() => import('./pages/MyRequests').then(m => ({ default: m.MyRequests })));
 const Register = React.lazy(() => import('./pages/Register').then(m => ({ default: m.Register })));
 
 const LoadingScreen: React.FC = () => (
@@ -59,6 +60,7 @@ const AppRoutes: React.FC = () => {
         <Route path="/register" element={<Register />} />
         <Route element={<Layout />}>
           <Route path="/" element={<Dashboard />} />
+          <Route path="/my-requests" element={<MyRequests />} />
           <Route path="/requests/new" element={<NewRequest />} />
           <Route path="/requests/:id/edit" element={<NewRequest />} />
           <Route path="/requests/:id" element={<RequestDetail />} />

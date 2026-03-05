@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useRequestStore, useUserStore, useAdminStore, useToastStore } from '../stores';
 import { RequestStatus, Role, Classification, ClarificationComment } from '../types';
 import { DynamicForm } from '../components/DynamicForm';
 import { calculateBusinessHours, formatBusinessHours } from '../lib/businessHours';
-import { ArrowLeft, CheckCircle, XCircle, UserPlus, AlertTriangle, FileCheck, Mail, Edit3, RotateCcw, CornerUpLeft, Paperclip, Download, User as UserIcon, MessageSquare, Send, Clock, RefreshCw, FileDown } from 'lucide-react';
+import { ArrowLeft, CheckCircle, XCircle, UserPlus, AlertTriangle, FileCheck, Mail, Edit3, RotateCcw, CornerUpLeft, Paperclip, Download, User as UserIcon, MessageSquare, Send, Clock, RefreshCw, FileDown, Eye } from 'lucide-react';
 import { exportRequestPdf } from '../lib/exportRequestPdf';
 import { SLACountdown } from '../components/SLACountdown';
 import { RequestTimeline } from '../components/RequestTimeline';
@@ -30,12 +30,109 @@ export const RequestDetail: React.FC = () => {
   const [showReassign, setShowReassign] = useState(false);
   const [reassignId, setReassignId] = useState('');
   const [confirmReject, setConfirmReject] = useState(false);
+  const [isSendingChat, setIsSendingChat] = useState(false);
+  const [showMentions, setShowMentions] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState('');
+  const [mentionCursorPos, setMentionCursorPos] = useState(0);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const mentionDropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (request) {
       setFinalDesc(request.finalDescription || request.generatedDescription || '');
     }
   }, [request]);
+
+  // Auto-scroll to bottom when clarification thread changes
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [requests.find(r => r.id === id)?.clarificationThread?.length]);
+
+  // Format relative timestamps
+  const formatRelativeTime = (timestamp: string): string => {
+    const now = new Date();
+    const then = new Date(timestamp);
+    const diffMs = now.getTime() - then.getTime();
+    const diffSec = Math.floor(diffMs / 1000);
+    const diffMin = Math.floor(diffSec / 60);
+    const diffHr = Math.floor(diffMin / 60);
+    const diffDay = Math.floor(diffHr / 24);
+
+    if (diffSec < 60) return 'Just now';
+    if (diffMin < 60) return `${diffMin}m ago`;
+    if (diffHr < 24) return `${diffHr}h ago`;
+    if (diffDay === 1) return 'Yesterday';
+    if (diffDay < 7) return `${diffDay}d ago`;
+    return then.toLocaleDateString();
+  };
+
+  // Check if two messages should be grouped (same user, within 2 minutes)
+  const shouldGroupMessages = (a: ClarificationComment, b: ClarificationComment): boolean => {
+    if (a.userId !== b.userId) return false;
+    const diff = Math.abs(new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    return diff < 2 * 60 * 1000; // 2 minutes
+  };
+
+  // Render message content with @mention highlighting
+  const renderMessageWithMentions = (text: string): React.ReactNode => {
+    const parts = text.split(/(@\w[\w\s]*?\w(?=\s|$|@)|@\w+)/g);
+    return parts.map((part, i) => {
+      if (part.startsWith('@')) {
+        return (
+          <span key={i} className="bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-1 rounded font-medium">
+            {part}
+          </span>
+        );
+      }
+      return part;
+    });
+  };
+
+  // Handle chat textarea changes with @mention detection
+  const handleChatInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    const cursorPos = e.target.selectionStart || 0;
+    setClarificationMessage(val);
+    setMentionCursorPos(cursorPos);
+
+    // Detect @mention trigger
+    const textBeforeCursor = val.slice(0, cursorPos);
+    const atMatch = textBeforeCursor.match(/@(\w*)$/);
+    if (atMatch) {
+      setShowMentions(true);
+      setMentionQuery(atMatch[1].toLowerCase());
+    } else {
+      setShowMentions(false);
+      setMentionQuery('');
+    }
+
+    // Auto-grow textarea
+    const textarea = e.target;
+    textarea.style.height = 'auto';
+    const lineHeight = 20;
+    const maxHeight = lineHeight * 4;
+    textarea.style.height = `${Math.min(textarea.scrollHeight, maxHeight)}px`;
+  };
+
+  // Insert @mention into textarea
+  const insertMention = (userName: string) => {
+    const textBeforeCursor = clarificationMessage.slice(0, mentionCursorPos);
+    const textAfterCursor = clarificationMessage.slice(mentionCursorPos);
+    const atIndex = textBeforeCursor.lastIndexOf('@');
+    const newText = textBeforeCursor.slice(0, atIndex) + `@${userName} ` + textAfterCursor;
+    setClarificationMessage(newText);
+    setShowMentions(false);
+    setMentionQuery('');
+    chatTextareaRef.current?.focus();
+  };
+
+  // Filtered users for @mention dropdown
+  const mentionUsers = users.filter(u =>
+    u.name.toLowerCase().includes(mentionQuery) && u.id !== currentUser.id
+  ).slice(0, 5);
 
   if (!request) {
     return (
@@ -148,7 +245,8 @@ export const RequestDetail: React.FC = () => {
   };
 
   const handleAddClarification = () => {
-    if (!clarificationMessage.trim()) return;
+    if (!clarificationMessage.trim() || isSendingChat) return;
+    setIsSendingChat(true);
     const newComment: ClarificationComment = {
       id: crypto.getRandomValues(new Uint32Array(1))[0].toString(36),
       userId: currentUser.id,
@@ -157,8 +255,15 @@ export const RequestDetail: React.FC = () => {
       timestamp: new Date().toISOString(),
     };
     const updatedThread = [...(request.clarificationThread || []), newComment];
-    updateRequest(request.id, { clarificationThread: updatedThread }, `Added clarification comment`);
+    updateRequest(request.id, { clarificationThread: updatedThread }, `Added discussion comment`);
     setClarificationMessage('');
+    setShowMentions(false);
+    // Reset textarea height
+    if (chatTextareaRef.current) {
+      chatTextareaRef.current.style.height = 'auto';
+    }
+    // Simulate brief sending delay for UX feedback
+    setTimeout(() => setIsSendingChat(false), 300);
   };
 
   const renderActions = () => {
@@ -372,42 +477,147 @@ export const RequestDetail: React.FC = () => {
             )}
           </div>
 
-          {/* Clarification Thread */}
-          {(request.status === RequestStatus.RETURNED_FOR_CLARIFICATION || (request.clarificationThread && request.clarificationThread.length > 0)) && (
-            <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-premium border border-amber-200/60 dark:border-amber-700/60" aria-label="Clarification thread" role="log">
-              <h3 className="text-sm uppercase font-bold text-amber-800 dark:text-amber-400 mb-4 flex items-center gap-2 tracking-wide"><MessageSquare size={16} strokeWidth={1.75} /> Clarification Thread</h3>
-              <div className="space-y-3 max-h-64 overflow-y-auto mb-4">
-                {(request.clarificationThread || []).map(c => (
-                  <div key={c.id} className={`p-3 rounded-xl text-sm ${c.userId === request.requesterId ? 'bg-blue-50 dark:bg-blue-950 border border-blue-100/60 dark:border-blue-700/60 ml-4' : 'bg-slate-50 dark:bg-slate-700/50 border border-slate-200/60 dark:border-slate-700/60 mr-4'}`}>
-                    <div className="flex justify-between items-center mb-1">
-                      <span className="font-medium text-slate-800 dark:text-slate-200">{c.userName}</span>
-                      <span className="text-xs text-slate-500 dark:text-slate-400">{new Date(c.timestamp).toLocaleString()}</span>
-                    </div>
-                    <p className="text-slate-700 dark:text-slate-300">{c.message}</p>
-                  </div>
-                ))}
-                {(!request.clarificationThread || request.clarificationThread.length === 0) && (
-                  <p className="text-sm text-slate-500 dark:text-slate-400 italic">No messages yet. Use the form below to add a clarification.</p>
-                )}
-              </div>
-              {request.status === RequestStatus.RETURNED_FOR_CLARIFICATION && (
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    aria-label="Enter clarification message"
-                    className="flex-1 border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 text-sm focus:border-blue-500 focus:ring-blue-500/20 transition dark:bg-slate-700 dark:text-slate-200"
-                    placeholder="Type your message..."
-                    value={clarificationMessage}
-                    onChange={e => setClarificationMessage(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') handleAddClarification(); }}
-                  />
-                  <button onClick={handleAddClarification} aria-label="Send clarification" className="bg-amber-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-amber-700 dark:hover:bg-amber-500 transition text-sm">
-                    <Send size={14} strokeWidth={1.75} /> Send
-                  </button>
+          {/* Discussion Thread */}
+          <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-premium border border-slate-200/60 dark:border-slate-700/60" aria-label="Discussion thread" role="log">
+            <h3 className="text-sm uppercase font-bold text-blue-800 dark:text-blue-400 mb-4 flex items-center gap-2 tracking-wide">
+              <MessageSquare size={16} strokeWidth={1.75} /> Discussion Thread
+              {request.clarificationThread && request.clarificationThread.length > 0 && (
+                <span className="ml-auto text-xs font-normal text-slate-500 dark:text-slate-400">
+                  {request.clarificationThread.length} message{request.clarificationThread.length !== 1 ? 's' : ''}
+                </span>
+              )}
+            </h3>
+
+            {/* Chat messages area */}
+            <div className="max-h-80 overflow-y-auto mb-4 space-y-1 px-1" role="list" aria-label="Discussion messages">
+              {(!request.clarificationThread || request.clarificationThread.length === 0) && (
+                <div className="flex flex-col items-center justify-center py-8 text-slate-400 dark:text-slate-500">
+                  <MessageSquare size={32} strokeWidth={1.25} className="mb-2 opacity-50" />
+                  <p className="text-sm italic">No messages yet. Start the discussion below.</p>
                 </div>
               )}
+              {(request.clarificationThread || []).map((c, idx, arr) => {
+                const isCurrentUser = c.userId === currentUser.id;
+                const isGrouped = idx > 0 && shouldGroupMessages(arr[idx - 1], c);
+                const isLastInGroup = idx === arr.length - 1 || !shouldGroupMessages(c, arr[idx + 1]);
+
+                return (
+                  <div key={c.id} role="listitem" className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'} ${isGrouped ? 'mt-0.5' : 'mt-3'}`}>
+                    {/* Left avatar for others */}
+                    {!isCurrentUser && (
+                      <div className="flex-shrink-0 mr-2 self-end">
+                        {isLastInGroup ? (
+                          <div className="w-7 h-7 rounded-full bg-slate-200 dark:bg-slate-600 flex items-center justify-center text-xs font-bold text-slate-600 dark:text-slate-300 uppercase" title={c.userName}>
+                            {c.userName.charAt(0)}
+                          </div>
+                        ) : (
+                          <div className="w-7" />
+                        )}
+                      </div>
+                    )}
+
+                    {/* Message bubble */}
+                    <div className={`max-w-[75%] ${isCurrentUser ? 'items-end' : 'items-start'}`}>
+                      {/* Show name only for first message in group (others) */}
+                      {!isCurrentUser && !isGrouped && (
+                        <div className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-0.5 ml-1">{c.userName}</div>
+                      )}
+                      <div className={`px-3 py-2 text-sm ${
+                        isCurrentUser
+                          ? 'bg-blue-600 text-white rounded-2xl rounded-br-md'
+                          : 'bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-2xl rounded-bl-md'
+                      }`}>
+                        <p className="whitespace-pre-wrap break-words">{renderMessageWithMentions(c.message)}</p>
+                      </div>
+                      {/* Timestamp + seen indicator on last message in group */}
+                      {isLastInGroup && (
+                        <div className={`flex items-center gap-1 mt-0.5 ${isCurrentUser ? 'justify-end mr-1' : 'justify-start ml-1'}`}>
+                          <span className="text-[10px] text-slate-400 dark:text-slate-500">{formatRelativeTime(c.timestamp)}</span>
+                          {isCurrentUser && (
+                            <Eye size={10} className="text-blue-400 dark:text-blue-500" aria-label="Seen" />
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Right avatar for current user */}
+                    {isCurrentUser && (
+                      <div className="flex-shrink-0 ml-2 self-end">
+                        {isLastInGroup ? (
+                          <div className="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-xs font-bold text-white uppercase" title={c.userName}>
+                            {c.userName.charAt(0)}
+                          </div>
+                        ) : (
+                          <div className="w-7" />
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              <div ref={messagesEndRef} />
             </div>
-          )}
+
+            {/* Chat input area */}
+            <div className="border-t border-slate-200/60 dark:border-slate-700/60 pt-3 relative">
+              {/* @mention autocomplete dropdown */}
+              {showMentions && mentionUsers.length > 0 && (
+                <div ref={mentionDropdownRef} className="absolute bottom-full mb-1 left-0 w-64 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg shadow-lg z-10 overflow-hidden">
+                  {mentionUsers.map(u => (
+                    <button
+                      key={u.id}
+                      type="button"
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 dark:hover:bg-slate-600 flex items-center gap-2 transition"
+                      onMouseDown={(e) => { e.preventDefault(); insertMention(u.name); }}
+                    >
+                      <div className="w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-500 flex items-center justify-center text-xs font-bold text-slate-600 dark:text-slate-200 uppercase">
+                        {u.name.charAt(0)}
+                      </div>
+                      <span className="text-slate-800 dark:text-slate-200">{u.name}</span>
+                      <span className="text-xs text-slate-400 dark:text-slate-500 ml-auto">{u.role}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex gap-2 items-end">
+                <div className="flex-1 relative">
+                  <textarea
+                    ref={chatTextareaRef}
+                    aria-label="Type a message"
+                    className="w-full border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 pr-16 text-sm focus:border-blue-500 focus:ring-blue-500/20 transition dark:bg-slate-700 dark:text-slate-200 resize-none overflow-hidden"
+                    placeholder="Type a message... (@ to mention)"
+                    value={clarificationMessage}
+                    onChange={handleChatInputChange}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleAddClarification();
+                      }
+                    }}
+                    rows={1}
+                    maxLength={1000}
+                    disabled={isSendingChat}
+                    style={{ minHeight: '40px' }}
+                  />
+                  <span className="absolute right-2 bottom-1.5 text-[10px] text-slate-400 dark:text-slate-500 pointer-events-none">
+                    {clarificationMessage.length}/1000
+                  </span>
+                </div>
+                <button
+                  onClick={handleAddClarification}
+                  disabled={!clarificationMessage.trim() || isSendingChat}
+                  aria-label="Send message"
+                  className="bg-blue-600 text-white p-2.5 rounded-lg flex items-center justify-center hover:bg-blue-700 dark:hover:bg-blue-500 transition disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+                >
+                  <Send size={16} strokeWidth={1.75} />
+                </button>
+              </div>
+              <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">
+                Press Enter to send, Shift+Enter for new line
+              </p>
+            </div>
+          </div>
 
           {/* Workflow Actions */}
           {showWorkflowActions && (

@@ -12,6 +12,8 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, 
 import { DashboardLayoutEditor } from '../components/DashboardLayoutEditor';
 import { PerformanceMetrics } from '../components/PerformanceMetrics';
 import { SLACountdown } from '../components/SLACountdown';
+import { WelcomeCard } from '../components/WelcomeCard';
+import { EmptyState } from '../components/EmptyState';
 
 const PAGE_SIZE = 15;
 const ANALYTICS_COLORS = ['#2563eb', '#f59e0b', '#ef4444', '#10b981', '#8b5cf6'];
@@ -37,6 +39,7 @@ export const Dashboard: React.FC = () => {
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [showPerformance, setShowPerformance] = useState(false);
   const [showLayoutEditor, setShowLayoutEditor] = useState(false);
+  const [welcomeDismissed, setWelcomeDismissed] = useState(() => localStorage.getItem('cm-welcome-dismissed') === 'true');
 
   // Layout store
   const layoutWidgets = useLayoutStore((s) => s.widgets);
@@ -119,6 +122,22 @@ export const Dashboard: React.FC = () => {
     addToast(`Assigned ${selectedIds.size} request(s) to ${specialist?.name || 'specialist'}.`, 'success');
     clearSelection();
     setBulkAssignId('');
+  };
+
+  const handleBulkApprove = () => {
+    const eligible = requests.filter(r => selectedIds.has(r.id) && r.status === RequestStatus.PENDING_APPROVAL);
+    if (eligible.length === 0) { addToast('No selected requests are pending approval.', 'warning'); return; }
+    eligible.forEach(req => {
+      updateRequestStatus(req.id, RequestStatus.SUBMITTED_TO_POC, 'Bulk approved by Manager');
+    });
+    addToast(`Approved ${eligible.length} request(s).`, 'success');
+    clearSelection();
+  };
+
+  const handleBulkExportExcel = () => {
+    const selected = requests.filter(r => selectedIds.has(r.id));
+    exportRequestsToExcel(selected, priorities, users, `selected-requests-${new Date().toISOString().slice(0, 10)}`);
+    addToast(`Exported ${selected.length} request(s) to Excel.`, 'success');
   };
 
   // Get unique project codes for filter dropdown
@@ -322,8 +341,32 @@ export const Dashboard: React.FC = () => {
     return Object.entries(counts).map(([name, value]) => ({ name, value }));
   }, [requests, priorities]);
 
+  const userRequestCount = useMemo(() => {
+    if (currentUser.role === Role.REQUESTER) return requests.filter(r => r.requesterId === currentUser.id).length;
+    if (currentUser.role === Role.SPECIALIST) return requests.filter(r => r.assignedSpecialistId === currentUser.id).length;
+    if (currentUser.role === Role.MANAGER) return requests.filter(r => r.managerId === currentUser.id).length;
+    if (currentUser.role === Role.TECHNICAL_REVIEWER) return requests.filter(r => r.technicalReviewerId === currentUser.id).length;
+    return requests.length;
+  }, [requests, currentUser]);
+
+  const showWelcome = !welcomeDismissed && userRequestCount === 0;
+
+  const handleDismissWelcome = () => {
+    localStorage.setItem('cm-welcome-dismissed', 'true');
+    setWelcomeDismissed(true);
+  };
+
   return (
     <div className="space-y-6">
+      {showWelcome && (
+        <WelcomeCard
+          userName={currentUser.name}
+          role={currentUser.role}
+          onDismiss={handleDismissWelcome}
+          onCreateRequest={currentUser.role === Role.REQUESTER || currentUser.role === Role.ADMIN ? () => navigate('/requests/new') : undefined}
+        />
+      )}
+
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">Dashboard</h2>
         <div className="flex items-center gap-2">
@@ -685,12 +728,15 @@ export const Dashboard: React.FC = () => {
               }}
             >
               {paginatedRequests.length === 0 ? (
-                <tr><td colSpan={visibleColumns.size + (canBulkAction ? 1 : 0)} className="p-12 text-center" role="status">
-                  <FileText size={32} className="mx-auto text-slate-300 dark:text-slate-600 mb-3" />
-                  <p className="text-slate-500 dark:text-slate-400 font-medium">No requests found</p>
-                  <p className="text-slate-400 dark:text-slate-500 text-xs mt-1">
-                    {searchQuery || filterStatus !== 'all' ? 'Try adjusting your filters.' : 'Create a new request to get started.'}
-                  </p>
+                <tr><td colSpan={visibleColumns.size + (canBulkAction ? 1 : 0)}>
+                  <EmptyState
+                    icon={<FileText size={40} />}
+                    title="No requests found"
+                    description={searchQuery || filterStatus !== 'all' ? 'Try adjusting your filters or search terms.' : 'Create a new request to get started.'}
+                    actionLabel={!searchQuery && filterStatus === 'all' && (currentUser.role === Role.REQUESTER || currentUser.role === Role.ADMIN) ? 'Create Request' : undefined}
+                    onAction={!searchQuery && filterStatus === 'all' ? () => navigate('/requests/new') : undefined}
+                    size="sm"
+                  />
                 </td></tr>
               ) : (
                 paginatedRequests.map((req, rowIdx) => {
@@ -851,6 +897,29 @@ export const Dashboard: React.FC = () => {
             aria-label="Export selected requests as batch PDF"
           >
             <FileDown size={14} /> Batch PDF
+          </button>
+
+          {/* Bulk Approve - Manager/Admin only */}
+          {(currentUser.role === Role.MANAGER || currentUser.role === Role.ADMIN) && (() => {
+            const approveCount = requests.filter(r => selectedIds.has(r.id) && r.status === RequestStatus.PENDING_APPROVAL).length;
+            return approveCount > 0 ? (
+              <button
+                onClick={handleBulkApprove}
+                className="flex items-center gap-1 text-xs bg-green-600 hover:bg-green-700 px-3 py-1.5 rounded-lg font-medium transition"
+                aria-label={`Approve ${approveCount} pending requests`}
+              >
+                <CheckCircle size={14} /> Approve ({approveCount})
+              </button>
+            ) : null;
+          })()}
+
+          {/* Bulk Export to Excel */}
+          <button
+            onClick={handleBulkExportExcel}
+            className="flex items-center gap-1 text-xs bg-emerald-600 hover:bg-emerald-700 px-3 py-1.5 rounded-lg font-medium transition"
+            aria-label="Export selected requests to Excel"
+          >
+            <FileSpreadsheet size={14} /> Export Excel
           </button>
 
           <button

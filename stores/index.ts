@@ -9,4 +9,6 @@ export { useSettingsStore } from './settingsStore';
 export type { Theme } from './settingsStore';
 export { useLayoutStore } from './layoutStore';
 export type { DashboardWidget } from './layoutStore';
+export { useWorkflowStore } from './workflowStore';
+export type { WorkflowConfig } from './workflowStore';
 export { useInitializeStores } from './initializeStores';
