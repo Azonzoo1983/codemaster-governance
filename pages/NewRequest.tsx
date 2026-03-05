@@ -274,7 +274,7 @@ export const NewRequest: React.FC = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <button onClick={() => navigate('/')} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full transition">
+          <button onClick={() => step > 1 ? handleBack() : navigate('/')} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full transition" title={step > 1 ? `Back to Step ${step - 1}` : 'Back to Dashboard'}>
             <ArrowLeft size={20} strokeWidth={1.75} className="text-slate-700 dark:text-slate-300" />
           </button>
           <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100 tracking-tight">{requestId ? 'Edit & Resubmit Request' : 'New Request'}</h2>
