@@ -4,6 +4,7 @@ import { useInitializeStores, useUserStore } from './stores';
 import { Layout } from './components/Layout';
 import { ToastContainer } from './components/ToastContainer';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { PageTransition } from './components/PageTransition';
 import { Role } from './types';
 
 // Lazy-loaded pages for code splitting
@@ -59,15 +60,15 @@ const AppRoutes: React.FC = () => {
       <Routes>
         <Route path="/register" element={<Register />} />
         <Route element={<Layout />}>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/my-requests" element={<MyRequests />} />
-          <Route path="/requests/new" element={<NewRequest />} />
-          <Route path="/requests/:id/edit" element={<NewRequest />} />
-          <Route path="/requests/:id" element={<RequestDetail />} />
-          <Route path="/admin" element={<AdminGuard><Admin /></AdminGuard>} />
-          <Route path="/reports" element={<Reports />} />
-          <Route path="/activity" element={<ActivityFeed />} />
-          <Route path="/workflow" element={<WorkflowBuilder />} />
+          <Route path="/" element={<PageTransition><Dashboard /></PageTransition>} />
+          <Route path="/my-requests" element={<PageTransition><MyRequests /></PageTransition>} />
+          <Route path="/requests/new" element={<PageTransition><NewRequest /></PageTransition>} />
+          <Route path="/requests/:id/edit" element={<PageTransition><NewRequest /></PageTransition>} />
+          <Route path="/requests/:id" element={<PageTransition><RequestDetail /></PageTransition>} />
+          <Route path="/admin" element={<PageTransition><AdminGuard><Admin /></AdminGuard></PageTransition>} />
+          <Route path="/reports" element={<PageTransition><Reports /></PageTransition>} />
+          <Route path="/activity" element={<PageTransition><ActivityFeed /></PageTransition>} />
+          <Route path="/workflow" element={<PageTransition><WorkflowBuilder /></PageTransition>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

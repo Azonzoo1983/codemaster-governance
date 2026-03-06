@@ -3,11 +3,14 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useUserStore, useAdminStore, useRequestStore, useToastStore } from '../stores';
 import { Classification, MaterialSubType, ServiceSubType, RequestStatus, RequestItem, AttributeType } from '../types';
 import { DynamicForm } from '../components/DynamicForm';
-import { ArrowLeft, ArrowRight, Send, Info, AlertTriangle, CheckCircle, Paperclip, X, FileText, Eye, Upload, UploadCloud, Loader2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Send, Info, AlertTriangle, CheckCircle, Paperclip, X, FileText, Eye, Upload, UploadCloud, Loader2, Save } from 'lucide-react';
 import { uploadFile, validateFile, formatFileSize } from '../lib/fileUpload';
+import { HelpTooltip } from '../components/HelpTooltip';
 
 const MAX_ATTACHMENT_SIZE = 10_000_000; // 10MB (upgraded with Supabase Storage)
 const TOTAL_STEPS = 4;
+const AUTOSAVE_KEY = 'cm-draft-autosave';
+const AUTOSAVE_INTERVAL = 30_000; // 30 seconds
 
 const SERVICE_UOM_OPTIONS = ['Days', 'Hours', 'Lumpsum', 'Each', 'Monthly', 'Weekly', 'Per Visit', 'Per Unit'];
 
@@ -27,6 +30,10 @@ export const NewRequest: React.FC = () => {
   const [dbChecked, setDbChecked] = useState(false);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
 
+  const [showDraftBanner, setShowDraftBanner] = useState(false);
+  const [autoSaveIndicator, setAutoSaveIndicator] = useState(false);
+  const autoSaveIndicatorKey = useRef(0);
+
   const [formData, setFormData] = useState<Partial<RequestItem>>({
     classification: Classification.ITEM,
     attributes: {},
@@ -45,6 +52,101 @@ export const NewRequest: React.FC = () => {
       }
     }
   }, [requestId, requests]);
+
+  // Check for saved draft on mount (only for new requests)
+  useEffect(() => {
+    if (requestId) return;
+    try {
+      const saved = localStorage.getItem(AUTOSAVE_KEY);
+      if (saved) {
+        setShowDraftBanner(true);
+      }
+    } catch {
+      // Ignore localStorage errors
+    }
+  }, [requestId]);
+
+  // Auto-save every 30 seconds (only for new requests)
+  useEffect(() => {
+    if (requestId) return;
+    const interval = setInterval(() => {
+      try {
+        const draftData = {
+          step,
+          dbChecked,
+          formData: {
+            ...formData,
+            attachments: (formData.attachments || []).map(a => ({
+              id: a.id,
+              name: a.name,
+              type: a.type,
+              size: a.size,
+              url: a.url,
+            })),
+          },
+          savedAt: new Date().toISOString(),
+        };
+        localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(draftData));
+        autoSaveIndicatorKey.current += 1;
+        setAutoSaveIndicator(true);
+        setTimeout(() => setAutoSaveIndicator(false), 2000);
+      } catch {
+        // Ignore localStorage errors
+      }
+    }, AUTOSAVE_INTERVAL);
+    return () => clearInterval(interval);
+  }, [requestId, step, dbChecked, formData]);
+
+  const handleResumeDraft = () => {
+    try {
+      const saved = localStorage.getItem(AUTOSAVE_KEY);
+      if (saved) {
+        const draft = JSON.parse(saved);
+        if (draft.formData) setFormData(draft.formData);
+        if (draft.step) setStep(draft.step);
+        if (draft.dbChecked) setDbChecked(draft.dbChecked);
+      }
+    } catch {
+      // Ignore parse errors
+    }
+    setShowDraftBanner(false);
+  };
+
+  const handleDiscardDraft = () => {
+    try {
+      localStorage.removeItem(AUTOSAVE_KEY);
+    } catch {
+      // Ignore
+    }
+    setShowDraftBanner(false);
+  };
+
+  const handleManualSave = () => {
+    try {
+      const draftData = {
+        step,
+        dbChecked,
+        formData: {
+          ...formData,
+          attachments: (formData.attachments || []).map(a => ({
+            id: a.id,
+            name: a.name,
+            type: a.type,
+            size: a.size,
+            url: a.url,
+          })),
+        },
+        savedAt: new Date().toISOString(),
+      };
+      localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(draftData));
+      autoSaveIndicatorKey.current += 1;
+      setAutoSaveIndicator(true);
+      setTimeout(() => setAutoSaveIndicator(false), 2000);
+      addToast('Draft saved successfully.', 'info');
+    } catch {
+      addToast('Could not save draft.', 'warning');
+    }
+  };
 
   // Filtered attributes based on classification
   const relevantAttributes = useMemo(() =>
@@ -228,6 +330,8 @@ export const NewRequest: React.FC = () => {
       addRequest(newRequestPayload);
     }
 
+    // Clear auto-saved draft on successful submission
+    try { localStorage.removeItem(AUTOSAVE_KEY); } catch { /* ignore */ }
     navigate('/');
   };
 
@@ -323,6 +427,30 @@ export const NewRequest: React.FC = () => {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
+      {/* Draft Resume Banner */}
+      {showDraftBanner && !requestId && (
+        <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200/60 dark:border-blue-700/60 rounded-xl p-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Info size={18} className="text-blue-500 dark:text-blue-400 shrink-0" />
+            <p className="text-sm font-medium text-blue-800 dark:text-blue-200">Resume your previous draft?</p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={handleDiscardDraft}
+              className="px-3 py-1.5 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition"
+            >
+              Discard
+            </button>
+            <button
+              onClick={handleResumeDraft}
+              className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 rounded-lg transition"
+            >
+              Resume
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
@@ -331,7 +459,26 @@ export const NewRequest: React.FC = () => {
           </button>
           <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100 tracking-tight">{requestId ? 'Edit & Resubmit Request' : 'New Request'}</h2>
         </div>
-        <div className="text-sm text-slate-500 dark:text-slate-400 font-medium">Step {step} of {TOTAL_STEPS}</div>
+        <div className="flex items-center gap-3">
+          {/* Auto-save indicator */}
+          {autoSaveIndicator && (
+            <span key={autoSaveIndicatorKey.current} className="text-xs text-emerald-600 dark:text-emerald-400 font-medium animate-autosave-fade">
+              Draft saved
+            </span>
+          )}
+          {/* Manual Save Draft button (only for new requests) */}
+          {!requestId && (
+            <button
+              onClick={handleManualSave}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-800 dark:hover:text-slate-200 transition"
+              title="Save draft"
+            >
+              <Save size={14} strokeWidth={1.75} />
+              Save Draft
+            </button>
+          )}
+          <div className="text-sm text-slate-500 dark:text-slate-400 font-medium">Step {step} of {TOTAL_STEPS}</div>
+        </div>
       </div>
 
       {/* Step Indicator — Clickable for completed steps */}
@@ -481,7 +628,7 @@ export const NewRequest: React.FC = () => {
 
             {/* Classification */}
             <div className="pt-4 border-t border-slate-100 dark:border-slate-700">
-              <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-3">Classification</label>
+              <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-3">Classification<HelpTooltip text="Choose 'Item' for physical materials/parts or 'Service' for service-based coding requests" /></label>
               <div className="flex gap-4">
                 {[Classification.ITEM, Classification.SERVICE].map(c => (
                   <button
@@ -576,10 +723,25 @@ export const NewRequest: React.FC = () => {
               </p>
             </div>
 
+            {/* Additional Description */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                Additional Description
+                <HelpTooltip text="Provide details about the item or service. An auto-description will also be generated from attributes" />
+              </label>
+              <textarea
+                className="w-full rounded-lg border-slate-300 dark:border-slate-600 shadow-sm border p-2.5 focus:border-blue-500 focus:ring-blue-500/20 transition bg-white dark:bg-slate-700 dark:text-slate-200 dark:placeholder-slate-400"
+                rows={3}
+                value={formData.description || ''}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                placeholder="Optional: add any additional details not captured by the attributes above..."
+              />
+            </div>
+
             {/* Core Fields */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Request Title <span className="text-red-500">*</span></label>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Request Title <span className="text-red-500">*</span><HelpTooltip text="Enter a brief, descriptive title summarizing what needs to be coded" /></label>
                 <input
                   type="text"
                   className="w-full rounded-lg border-slate-300 dark:border-slate-600 shadow-sm border p-2.5 focus:border-blue-500 focus:ring-blue-500/20 transition bg-white dark:bg-slate-700 dark:text-slate-200 dark:placeholder-slate-400"
@@ -669,7 +831,7 @@ export const NewRequest: React.FC = () => {
             {/* Attachments */}
             <div className="pt-4 border-t border-slate-100 dark:border-slate-700">
               <h4 className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-3 flex items-center gap-2">
-                <Paperclip size={14} strokeWidth={1.75} /> Attachments
+                <Paperclip size={14} strokeWidth={1.75} /> Attachments<HelpTooltip text="Upload supporting documents like specifications, drawings, or data sheets (max 10MB each)" />
               </h4>
               <div
                 onDragEnter={handleDragEnter}
@@ -757,7 +919,7 @@ export const NewRequest: React.FC = () => {
 
             {/* Priority Selection */}
             <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">Priority Level <span className="text-red-500">*</span></label>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">Priority Level <span className="text-red-500">*</span><HelpTooltip text="Normal: 2 business days. Urgent: 1 day. Critical: same day (requires manager approval)" /></label>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 {priorities.filter(p => p.active).sort((a, b) => a.displayOrder - b.displayOrder).map(p => (
                   <button

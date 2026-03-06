@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { Role } from '../types';
 
 export interface DashboardWidget {
   id: string; // 'kpi-cards' | 'analytics' | 'performance' | 'request-table'
@@ -16,6 +17,7 @@ interface LayoutState {
   moveWidget: (id: string, direction: 'up' | 'down') => void;
   resetLayout: () => void;
   setCompactMode: (compact: boolean) => void;
+  applyRoleDefaults: (role: Role) => void;
 }
 
 const DEFAULT_WIDGETS: DashboardWidget[] = [
@@ -24,6 +26,35 @@ const DEFAULT_WIDGETS: DashboardWidget[] = [
   { id: 'performance', label: 'Specialist Performance', visible: true, order: 2 },
   { id: 'request-table', label: 'Request Table', visible: true, order: 3 },
 ];
+
+export function getDefaultWidgetsForRole(role: Role): DashboardWidget[] {
+  switch (role) {
+    case Role.REQUESTER:
+      return DEFAULT_WIDGETS.map((w) => ({
+        ...w,
+        visible: w.id === 'kpi-cards' || w.id === 'request-table',
+      }));
+    case Role.MANAGER:
+      return DEFAULT_WIDGETS.map((w) => ({
+        ...w,
+        visible: w.id !== 'performance',
+      }));
+    case Role.SPECIALIST:
+      return DEFAULT_WIDGETS.map((w) => ({
+        ...w,
+        visible: w.id !== 'analytics',
+      }));
+    case Role.TECHNICAL_REVIEWER:
+      return DEFAULT_WIDGETS.map((w) => ({
+        ...w,
+        visible: w.id === 'kpi-cards' || w.id === 'request-table',
+      }));
+    case Role.POC:
+    case Role.ADMIN:
+    default:
+      return DEFAULT_WIDGETS.map((w) => ({ ...w }));
+  }
+}
 
 export const useLayoutStore = create<LayoutState>()(
   persist(
@@ -63,6 +94,9 @@ export const useLayoutStore = create<LayoutState>()(
         set({ widgets: DEFAULT_WIDGETS, compactMode: false }),
 
       setCompactMode: (compact) => set({ compactMode: compact }),
+
+      applyRoleDefaults: (role) =>
+        set({ widgets: getDefaultWidgetsForRole(role) }),
     }),
     {
       name: 'cm-dashboard-layout',

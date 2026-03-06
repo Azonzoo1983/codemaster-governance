@@ -1,11 +1,11 @@
-import React, { useState, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useRequestStore, useUserStore, useAdminStore, useLayoutStore } from '../stores';
+import { useRequestStore, useUserStore, useAdminStore, useLayoutStore, getDefaultWidgetsForRole } from '../stores';
 import { RequestStatus, Role, RequestItem, Classification } from '../types';
 import { calculateBusinessHours } from '../lib/businessHours';
 import { useToastStore } from '../stores';
 import { useTableKeyboardNav } from '../hooks/useTableKeyboardNav';
-import { Clock, CheckCircle, AlertCircle, FileText, ArrowRight, RotateCcw, Filter, Search, ChevronLeft, ChevronRight, ArrowUpDown, AlertTriangle, UserPlus, XCircle, Columns, TrendingUp, Users as UsersIcon, BarChart2, ChevronDown, ChevronUp, FileSpreadsheet, LayoutGrid, FileDown, Award } from 'lucide-react';
+import { Clock, CheckCircle, AlertCircle, FileText, ArrowRight, RotateCcw, Filter, Search, ChevronLeft, ChevronRight, ArrowUpDown, AlertTriangle, UserPlus, XCircle, Columns, TrendingUp, Users as UsersIcon, BarChart2, ChevronDown, ChevronUp, FileSpreadsheet, LayoutGrid, FileDown, Award, List, Grid3X3, Play } from 'lucide-react';
 import { exportRequestsToExcel } from '../lib/exportExcel';
 import { exportBatchPdf } from '../lib/exportBatchPdf';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, ResponsiveContainer, LineChart, Line, Area, AreaChart } from 'recharts';
@@ -14,6 +14,8 @@ import { PerformanceMetrics } from '../components/PerformanceMetrics';
 import { SLACountdown } from '../components/SLACountdown';
 import { WelcomeCard } from '../components/WelcomeCard';
 import { EmptyState } from '../components/EmptyState';
+import { FilterPresets } from '../components/FilterPresets';
+import type { FilterPreset } from '../components/FilterPresets';
 
 const PAGE_SIZE = 15;
 const ANALYTICS_COLORS = ['#2563eb', '#f59e0b', '#ef4444', '#10b981', '#8b5cf6'];
@@ -44,11 +46,31 @@ export const Dashboard: React.FC = () => {
   // Layout store
   const layoutWidgets = useLayoutStore((s) => s.widgets);
   const compactMode = useLayoutStore((s) => s.compactMode);
+  const applyRoleDefaults = useLayoutStore((s) => s.applyRoleDefaults);
   const sortedLayoutWidgets = useMemo(
     () => [...layoutWidgets].sort((a, b) => a.order - b.order),
     [layoutWidgets]
   );
   const isWidgetVisible = (id: string) => layoutWidgets.find((w) => w.id === id)?.visible ?? true;
+
+  // Card view toggle
+  const [viewMode, setViewMode] = useState<"list" | "grid">(() => {
+    const saved = localStorage.getItem("cm-dashboard-view-mode");
+    return saved === "grid" ? "grid" : "list";
+  });
+  const handleSetViewMode = (mode: "list" | "grid") => {
+    setViewMode(mode);
+    localStorage.setItem("cm-dashboard-view-mode", mode);
+  };
+
+  // Apply role-based widget defaults on first load
+  useEffect(() => {
+    const roleKey = "cm-layout-role-applied-" + currentUser.role;
+    if (!localStorage.getItem(roleKey)) {
+      applyRoleDefaults(currentUser.role);
+      localStorage.setItem(roleKey, "true");
+    }
+  }, [currentUser.role, applyRoleDefaults]);
 
   // Column visibility
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(
@@ -85,7 +107,7 @@ export const Dashboard: React.FC = () => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkAssignId, setBulkAssignId] = useState('');
 
-  const canBulkAction = currentUser.role === Role.ADMIN || currentUser.role === Role.POC || currentUser.role === Role.MANAGER;
+  const canBulkAction = currentUser.role === Role.ADMIN || currentUser.role === Role.POC || currentUser.role === Role.MANAGER || currentUser.role === Role.SPECIALIST || currentUser.role === Role.TECHNICAL_REVIEWER;
   const specialists = users.filter(u => u.role === Role.SPECIALIST);
 
   const toggleSelect = (id: string) => {
@@ -138,6 +160,46 @@ export const Dashboard: React.FC = () => {
     const selected = requests.filter(r => selectedIds.has(r.id));
     exportRequestsToExcel(selected, priorities, users, `selected-requests-${new Date().toISOString().slice(0, 10)}`);
     addToast(`Exported ${selected.length} request(s) to Excel.`, 'success');
+  };
+
+  // Bulk Advance - Specialist: advance ASSIGNED/UNDER_SPECIALIST_REVIEW -> next status
+  const handleBulkAdvanceSpecialist = () => {
+    const eligible = requests.filter(r => selectedIds.has(r.id) && (r.status === RequestStatus.ASSIGNED || r.status === RequestStatus.UNDER_SPECIALIST_REVIEW));
+    if (eligible.length === 0) { addToast("No selected requests are eligible to advance.", "warning"); return; }
+    eligible.forEach(req => {
+      if (req.status === RequestStatus.ASSIGNED) {
+        updateRequestStatus(req.id, RequestStatus.UNDER_SPECIALIST_REVIEW, "Bulk advanced by Specialist");
+      } else if (req.status === RequestStatus.UNDER_SPECIALIST_REVIEW) {
+        updateRequestStatus(req.id, RequestStatus.UNDER_TECHNICAL_VALIDATION, "Bulk advanced by Specialist");
+      }
+    });
+    addToast("Advanced " + eligible.length + " request(s).", "success");
+    clearSelection();
+  };
+
+  // Bulk Advance - Technical Reviewer: advance UNDER_TECHNICAL_VALIDATION -> PENDING_ORACLE_CREATION
+  const handleBulkAdvanceTechnicalReviewer = () => {
+    const eligible = requests.filter(r => selectedIds.has(r.id) && r.status === RequestStatus.UNDER_TECHNICAL_VALIDATION);
+    if (eligible.length === 0) { addToast("No selected requests are eligible to advance.", "warning"); return; }
+    eligible.forEach(req => {
+      updateRequestStatus(req.id, RequestStatus.PENDING_ORACLE_CREATION, "Bulk advanced by Technical Reviewer");
+    });
+    addToast("Advanced " + eligible.length + " request(s).", "success");
+    clearSelection();
+  };
+
+  // Bulk Advance - POC: advance SUBMITTED_TO_POC -> ASSIGNED with specialist
+  const handleBulkAdvancePOC = () => {
+    if (!bulkAssignId) { addToast("Select a specialist first.", "warning"); return; }
+    const specialist = users.find(u => u.id === bulkAssignId);
+    const eligible = requests.filter(r => selectedIds.has(r.id) && r.status === RequestStatus.SUBMITTED_TO_POC);
+    if (eligible.length === 0) { addToast("No selected requests are eligible to advance.", "warning"); return; }
+    eligible.forEach(req => {
+      updateRequest(req.id, { assignedSpecialistId: bulkAssignId, status: RequestStatus.ASSIGNED });
+    });
+    addToast("Advanced " + eligible.length + " request(s) to Assigned (" + (specialist?.name || "specialist") + ").", "success");
+    clearSelection();
+    setBulkAssignId("");
   };
 
   // Get unique project codes for filter dropdown
@@ -581,6 +643,18 @@ export const Dashboard: React.FC = () => {
             <React.Fragment key={widget.id}>
       {/* Request Table */}
       <div className="bg-white dark:bg-slate-800 rounded-xl shadow-premium border border-slate-200/60 dark:border-slate-700/60 overflow-hidden">
+        {/* Filter Presets */}
+        <div className="px-4 pt-4">
+          <FilterPresets
+            currentFilters={{ statusFilter: filterStatus, priorityFilter: filterPriority, classificationFilter: filterClassification, searchQuery }}
+            onApplyPreset={(preset: FilterPreset) => {
+              setFilterStatus(preset.statusFilter);
+              setFilterPriority(preset.priorityFilter);
+              setFilterClassification(preset.classificationFilter);
+              setSearchQuery(preset.searchQuery);
+            }}
+          />
+        </div>
         {/* Filters Bar */}
         <div className="p-4 border-b border-slate-100 dark:border-slate-700 space-y-3">
           <div className="flex items-center gap-3 flex-wrap">
@@ -595,6 +669,26 @@ export const Dashboard: React.FC = () => {
                 onChange={e => setSearchQuery(e.target.value)}
                 aria-label="Search requests"
               />
+            </div>
+
+            {/* Card/List View Toggle */}
+            <div className="flex items-center border border-slate-200 dark:border-slate-600 rounded-lg overflow-hidden">
+              <button
+                onClick={() => handleSetViewMode("list")}
+                className={`px-2.5 py-2 text-sm transition-colors ${viewMode === "list" ? "bg-blue-600 text-white" : "bg-white dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-600"}`}
+                aria-label="List view"
+                title="List view"
+              >
+                <List size={16} />
+              </button>
+              <button
+                onClick={() => handleSetViewMode("grid")}
+                className={`px-2.5 py-2 text-sm transition-colors ${viewMode === "grid" ? "bg-blue-600 text-white" : "bg-white dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-600"}`}
+                aria-label="Grid view"
+                title="Grid view"
+              >
+                <Grid3X3 size={16} />
+              </button>
             </div>
 
             <div className="flex items-center gap-2 flex-wrap">
@@ -675,10 +769,10 @@ export const Dashboard: React.FC = () => {
           <div className="text-xs text-slate-400">{sortedRequests.length} request{sortedRequests.length !== 1 ? 's' : ''} found</div>
         </div>
 
-        {/* Table */}
-        <div className="overflow-x-auto">
+        {viewMode === "list" ? (
+        <div className="overflow-x-auto max-h-[70vh] overflow-y-auto">
           <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50/80 dark:bg-slate-700/50 text-slate-500 dark:text-slate-400 font-medium border-b border-slate-200 dark:border-slate-700 text-xs uppercase tracking-wider">
+            <thead className="sticky top-0 z-10 shadow-[0_1px_3px_rgba(0,0,0,0.08)] bg-slate-50/80 dark:bg-slate-700/50 text-slate-500 dark:text-slate-400 font-medium border-b border-slate-200 dark:border-slate-700 text-xs uppercase tracking-wider">
               <tr>
                 {canBulkAction && (
                   <th scope="col" className="p-3 pl-4 w-10">
@@ -821,6 +915,49 @@ export const Dashboard: React.FC = () => {
             </tbody>
           </table>
         </div>
+        ) : (
+          /* Card/Grid View */
+          <div className="p-4">
+            {paginatedRequests.length === 0 ? (
+              <EmptyState
+                icon={<FileText size={40} />}
+                title="No requests found"
+                description={searchQuery || filterStatus !== "all" ? "Try adjusting your filters or search terms." : "Create a new request to get started."}
+                size="sm"
+              />
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                {paginatedRequests.map((req) => {
+                  const priorityMeta = getPriorityDisplay(req.priorityId);
+                  const reqPriority = priorities.find(p => p.id === req.priorityId);
+                  const slaBadge = getSLABadge(req);
+                  return (
+                    <div
+                      key={req.id}
+                      onClick={() => navigate(`/requests/${req.id}`)}
+                      className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 hover:shadow-lg dark:hover:border-slate-600 transition-all duration-200 cursor-pointer"
+                    >
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <h3 className="text-sm font-semibold text-slate-800 dark:text-white leading-snug line-clamp-2">{req.title}</h3>
+                        <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono whitespace-nowrap">{req.id.slice(0, 8)}</span>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1.5 mb-3">
+                        <span className={`badge-refined ${getStatusColor(req.status)}`}>{req.status}</span>
+                        <span className={`px-2 py-0.5 rounded text-xs font-bold ${priorityMeta.className}`}>{priorityMeta.name}</span>
+                        {slaBadge && <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${slaBadge.className}`}>{slaBadge.label}</span>}
+                      </div>
+                      <div className="space-y-1 text-[11px] text-slate-500 dark:text-slate-400">
+                        <div className="flex items-center gap-1.5"><Clock size={12} /> Created: {new Date(req.createdAt).toLocaleDateString()}</div>
+                        {req.assignedSpecialistId && <div className="flex items-center gap-1.5"><UsersIcon size={12} /> {getSpecialistName(req.assignedSpecialistId)}</div>}
+                        {reqPriority && <SLACountdown request={req} priority={reqPriority} />}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Pagination & Keyboard Navigation Hint */}
         <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between text-sm text-slate-600 dark:text-slate-400">
@@ -909,6 +1046,50 @@ export const Dashboard: React.FC = () => {
                 aria-label={`Approve ${approveCount} pending requests`}
               >
                 <CheckCircle size={14} /> Approve ({approveCount})
+              </button>
+            ) : null;
+          })()}
+
+
+          {/* Bulk Advance - POC */}
+          {(currentUser.role === Role.POC || currentUser.role === Role.ADMIN) && (() => {
+            const advCount = requests.filter(r => selectedIds.has(r.id) && r.status === RequestStatus.SUBMITTED_TO_POC).length;
+            return advCount > 0 ? (
+              <button
+                onClick={handleBulkAdvancePOC}
+                disabled={!bulkAssignId}
+                className="flex items-center gap-1 text-xs bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed px-3 py-1.5 rounded-lg font-medium transition"
+                aria-label={`Advance ${advCount} requests to Assigned`}
+              >
+                <Play size={14} /> Advance ({advCount})
+              </button>
+            ) : null;
+          })()}
+
+          {/* Bulk Advance - Specialist */}
+          {currentUser.role === Role.SPECIALIST && (() => {
+            const advCount = requests.filter(r => selectedIds.has(r.id) && (r.status === RequestStatus.ASSIGNED || r.status === RequestStatus.UNDER_SPECIALIST_REVIEW)).length;
+            return advCount > 0 ? (
+              <button
+                onClick={handleBulkAdvanceSpecialist}
+                className="flex items-center gap-1 text-xs bg-violet-600 hover:bg-violet-700 px-3 py-1.5 rounded-lg font-medium transition"
+                aria-label={`Advance ${advCount} requests`}
+              >
+                <Play size={14} /> Advance ({advCount})
+              </button>
+            ) : null;
+          })()}
+
+          {/* Bulk Advance - Technical Reviewer */}
+          {currentUser.role === Role.TECHNICAL_REVIEWER && (() => {
+            const advCount = requests.filter(r => selectedIds.has(r.id) && r.status === RequestStatus.UNDER_TECHNICAL_VALIDATION).length;
+            return advCount > 0 ? (
+              <button
+                onClick={handleBulkAdvanceTechnicalReviewer}
+                className="flex items-center gap-1 text-xs bg-cyan-600 hover:bg-cyan-700 px-3 py-1.5 rounded-lg font-medium transition"
+                aria-label={`Advance ${advCount} requests`}
+              >
+                <Play size={14} /> Advance ({advCount})
               </button>
             ) : null;
           })()}

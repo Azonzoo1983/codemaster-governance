@@ -13,7 +13,7 @@ export const SHORTCUTS: Shortcut[] = [
   { key: '/', description: 'Focus Search' },
   { key: 'Escape', description: 'Go Back / Close' },
   { key: '?', description: 'Show Keyboard Shortcuts', shift: true },
-  { key: 'k', description: 'Show Keyboard Shortcuts', ctrl: true },
+  { key: 'k', description: 'Open Global Search', ctrl: true },
   { key: 'h', description: 'Go to Dashboard' },
   { key: 'r', description: 'Go to Reports' },
 ];
@@ -21,6 +21,7 @@ export const SHORTCUTS: Shortcut[] = [
 export function useKeyboardShortcuts() {
   const navigate = useNavigate();
   const [showHelp, setShowHelp] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -40,8 +41,15 @@ export function useKeyboardShortcuts() {
         return;
       }
 
-      // Ctrl+K or Shift+? — show help
-      if ((e.ctrlKey && e.key === 'k') || (e.shiftKey && e.key === '?')) {
+      // Ctrl+K or Cmd+K — open global search
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        setShowSearch((prev) => !prev);
+        return;
+      }
+
+      // Shift+? — show help
+      if (e.shiftKey && e.key === '?') {
         e.preventDefault();
         setShowHelp((prev) => !prev);
         return;
@@ -85,5 +93,5 @@ export function useKeyboardShortcuts() {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
 
-  return { showHelp, setShowHelp };
+  return { showHelp, setShowHelp, showSearch, setShowSearch };
 }

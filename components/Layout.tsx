@@ -5,6 +5,8 @@ import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { useRealtimeNotifications } from '../hooks/useRealtimeNotifications';
 import { KeyboardShortcutHelp } from './KeyboardShortcutHelp';
 import { NotificationBell } from './NotificationBell';
+import { GlobalSearch } from './GlobalSearch';
+import { RecentActivitySidebar } from './RecentActivitySidebar';
 import { Role } from '../types';
 import type { Theme } from '../stores';
 import {
@@ -22,6 +24,7 @@ import {
   Monitor,
   GitBranch,
   FileText,
+  Search,
 } from 'lucide-react';
 
 const menuItems = [
@@ -49,7 +52,7 @@ export const Layout: React.FC = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
-  const { showHelp, setShowHelp } = useKeyboardShortcuts();
+  const { showHelp, setShowHelp, showSearch, setShowSearch } = useKeyboardShortcuts();
 
   // Enable real-time notifications
   useRealtimeNotifications(currentUser.id, true);
@@ -128,6 +131,17 @@ export const Layout: React.FC = () => {
 
         {/* Theme Toggle + Keyboard Shortcut Hint + Role Switcher */}
         <div className="p-4 border-t border-slate-700/50 bg-slate-900/80 backdrop-blur-sm">
+          {/* Search Button */}
+          <button
+            onClick={() => setShowSearch(true)}
+            className="w-full flex items-center gap-2 text-slate-400 hover:text-slate-200 text-xs mb-3 transition"
+            aria-label="Open search"
+          >
+            <Search size={14} strokeWidth={1.75} />
+            <span>Search</span>
+            <kbd className="ml-auto text-[10px] px-1.5 py-0.5 bg-slate-700 rounded border border-slate-600">Ctrl+K</kbd>
+          </button>
+
           {/* Theme Toggle */}
           <div className="mb-3">
             <div id="theme-label" className="text-[10px] text-slate-500 mb-1.5 uppercase font-semibold tracking-widest">Theme</div>
@@ -190,11 +204,15 @@ export const Layout: React.FC = () => {
       </aside>
 
       {/* Main Content */}
-      <main id="main-content" className="flex-1 p-4 md:p-8 overflow-y-auto min-h-0 bg-slate-50 dark:bg-slate-900 transition-colors duration-200" aria-label="Main content">
+      <main id="main-content" className="flex-1 p-4 md:p-8 overflow-y-auto min-h-0 bg-slate-50 dark:bg-slate-900 transition-colors duration-200 relative" aria-label="Main content">
         <div className="max-w-7xl mx-auto">
           <Outlet />
         </div>
+        <RecentActivitySidebar />
       </main>
+
+      {/* Global Search Modal */}
+      <GlobalSearch isOpen={showSearch} onClose={() => setShowSearch(false)} />
 
       {/* Keyboard Shortcuts Help Modal */}
       <KeyboardShortcutHelp isOpen={showHelp} onClose={() => setShowHelp(false)} />
