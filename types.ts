@@ -28,7 +28,6 @@ export enum Classification {
 export enum MaterialSubType {
   DIRECT_NONSTOCK = 'Direct (Nonstock)',
   INVENTORY_STOCK = 'Inventory (Stock)',
-  TOOLS = 'Tools'
 }
 
 export enum ServiceSubType {

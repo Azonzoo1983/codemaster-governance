@@ -656,7 +656,7 @@ export const NewRequest: React.FC = () => {
             {formData.classification === Classification.ITEM && (
               <div>
                 <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-3">Material Sub-Type</label>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 gap-3">
                   {Object.values(MaterialSubType).map(st => (
                     <button
                       key={st}

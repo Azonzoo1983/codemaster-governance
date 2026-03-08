@@ -74,12 +74,15 @@ export const Dashboard: React.FC = () => {
 
   // Column visibility
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(
-    new Set(['id', 'priority', 'title', 'classification', 'status', 'specialist', 'created', 'action'])
+    new Set(['id', 'requester', 'project', 'department', 'priority', 'title', 'classification', 'status', 'specialist', 'created', 'action'])
   );
   const [showColumnPicker, setShowColumnPicker] = useState(false);
 
   const columnDefs = [
     { key: 'id', label: 'ID' },
+    { key: 'requester', label: 'Requester' },
+    { key: 'project', label: 'Project' },
+    { key: 'department', label: 'Department' },
     { key: 'priority', label: 'Priority' },
     { key: 'title', label: 'Title' },
     { key: 'classification', label: 'Classification' },
@@ -786,6 +789,9 @@ export const Dashboard: React.FC = () => {
                   </th>
                 )}
                 {visibleColumns.has('id') && <th scope="col" className="p-3 pl-4">ID</th>}
+                {visibleColumns.has('requester') && <th scope="col" className="p-3">Requester</th>}
+                {visibleColumns.has('project') && <th scope="col" className="p-3">Project</th>}
+                {visibleColumns.has('department') && <th scope="col" className="p-3">Department</th>}
                 {visibleColumns.has('priority') && (
                   <th scope="col" className="p-3 cursor-pointer select-none" onClick={() => toggleSort('priority')} aria-sort={sortField === 'priority' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}>
                     <span className="flex items-center gap-1">Priority <ArrowUpDown size={12} /></span>
@@ -864,6 +870,21 @@ export const Dashboard: React.FC = () => {
                       {visibleColumns.has('id') && (
                         <td className="p-3 pl-4">
                           <span className="font-medium text-blue-600 dark:text-blue-400 text-xs font-mono">{req.id}</span>
+                        </td>
+                      )}
+                      {visibleColumns.has('requester') && (
+                        <td className="p-3 text-sm text-slate-700 dark:text-slate-300">
+                          {users.find(u => u.id === req.requesterId)?.name || 'Unknown'}
+                        </td>
+                      )}
+                      {visibleColumns.has('project') && (
+                        <td className="p-3 text-sm font-mono text-slate-600 dark:text-slate-400">
+                          {req.project || '-'}
+                        </td>
+                      )}
+                      {visibleColumns.has('department') && (
+                        <td className="p-3 text-sm text-slate-600 dark:text-slate-400">
+                          {users.find(u => u.id === req.requesterId)?.department || '-'}
                         </td>
                       )}
                       {visibleColumns.has('priority') && (
@@ -948,6 +969,9 @@ export const Dashboard: React.FC = () => {
                       </div>
                       <div className="space-y-1 text-[11px] text-slate-500 dark:text-slate-400">
                         <div className="flex items-center gap-1.5"><Clock size={12} /> Created: {new Date(req.createdAt).toLocaleDateString()}</div>
+                        <div className="flex items-center gap-1.5"><UsersIcon size={12} /> Requester: {users.find(u => u.id === req.requesterId)?.name || 'Unknown'}</div>
+                        {req.project && <div className="flex items-center gap-1.5"><FileText size={12} /> Project: {req.project}</div>}
+                        {users.find(u => u.id === req.requesterId)?.department && <div className="flex items-center gap-1.5"><BarChart2 size={12} /> Dept: {users.find(u => u.id === req.requesterId)?.department}</div>}
                         {req.assignedSpecialistId && <div className="flex items-center gap-1.5"><UsersIcon size={12} /> {getSpecialistName(req.assignedSpecialistId)}</div>}
                         {reqPriority && <SLACountdown request={req} priority={reqPriority} />}
                       </div>

@@ -4,7 +4,7 @@ import { useRequestStore, useUserStore, useAdminStore, useToastStore } from '../
 import { RequestStatus, Role, Classification, ClarificationComment } from '../types';
 import { DynamicForm } from '../components/DynamicForm';
 import { calculateBusinessHours, formatBusinessHours } from '../lib/businessHours';
-import { ArrowLeft, CheckCircle, XCircle, UserPlus, AlertTriangle, FileCheck, Mail, Edit3, RotateCcw, CornerUpLeft, Paperclip, Download, User as UserIcon, MessageSquare, Send, Clock, RefreshCw, FileDown, Eye } from 'lucide-react';
+import { ArrowLeft, CheckCircle, XCircle, UserPlus, AlertTriangle, FileCheck, Mail, Edit3, RotateCcw, CornerUpLeft, Paperclip, Download, User as UserIcon, MessageSquare, Send, Clock, RefreshCw, FileDown, Eye, Info, ListChecks } from 'lucide-react';
 import { exportRequestPdf } from '../lib/exportRequestPdf';
 import { SLACountdown } from '../components/SLACountdown';
 import { RequestTimeline } from '../components/RequestTimeline';
@@ -34,13 +34,18 @@ export const RequestDetail: React.FC = () => {
   const [showMentions, setShowMentions] = useState(false);
   const [mentionQuery, setMentionQuery] = useState('');
   const [mentionCursorPos, setMentionCursorPos] = useState(0);
+  const [selectedReviewerId, setSelectedReviewerId] = useState('');
+  const [editableUom, setEditableUom] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatTextareaRef = useRef<HTMLTextAreaElement>(null);
   const mentionDropdownRef = useRef<HTMLDivElement>(null);
 
+  const commonUomValues = ['Each', 'Meter', 'Kilogram', 'Liter', 'Piece', 'Set', 'Box', 'Roll', 'Pair', 'Pack', 'Sheet', 'Ton', 'Bag', 'Drum', 'Bundle', 'Feet', 'Inches', 'mm', 'cm', 'm'];
+
   useEffect(() => {
     if (request) {
       setFinalDesc(request.finalDescription || request.generatedDescription || '');
+      setEditableUom(request.uom || '');
     }
   }, [request]);
 
@@ -174,6 +179,56 @@ export const RequestDetail: React.FC = () => {
     (!request.managerId && !request.managerEmail)
   );
 
+
+  // Feature #15: Helper to get the most recent specialist remark from history when returned
+  const getSpecialistReturnRemarks = () => {
+    if (!request.history || request.history.length === 0) return null;
+    const returnEntries = request.history.filter(h =>
+      h.action.toLowerCase().includes('returned') || h.action.toLowerCase().includes('return')
+    );
+    if (returnEntries.length === 0) return null;
+    return returnEntries[returnEntries.length - 1];
+  };
+
+  // Feature #22: Comprehensive Summary Panel for Tech Reviewer & Oracle Creation
+  const renderComprehensiveSummary = () => (
+    <div className="bg-slate-50 dark:bg-slate-700/50 border border-slate-200/60 dark:border-slate-700/60 rounded-xl p-4 mb-3">
+      <h4 className="text-xs uppercase font-bold text-slate-600 dark:text-slate-400 mb-3 flex items-center gap-1.5 tracking-wide">
+        <ListChecks size={14} /> Request Summary
+      </h4>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+        {request.unspscCode && (
+          <div className="bg-white dark:bg-slate-800 rounded-lg p-2.5 border border-slate-200/60 dark:border-slate-700/60">
+            <span className="text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 tracking-wide">UNSPSC Commodity Code</span>
+            <p className="font-mono text-slate-800 dark:text-slate-200 mt-0.5">{request.unspscCode}</p>
+          </div>
+        )}
+        {request.generatedDescription && (
+          <div className="bg-white dark:bg-slate-800 rounded-lg p-2.5 border border-slate-200/60 dark:border-slate-700/60 sm:col-span-2">
+            <span className="text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 tracking-wide">Auto-Generated Description</span>
+            <p className="font-mono text-slate-800 dark:text-slate-200 mt-0.5 text-xs">{request.generatedDescription}</p>
+          </div>
+        )}
+        {request.existingCode && (
+          <div className="bg-white dark:bg-slate-800 rounded-lg p-2.5 border border-slate-200/60 dark:border-slate-700/60">
+            <span className="text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 tracking-wide">Item Code (Amendment)</span>
+            <p className="font-mono text-slate-800 dark:text-slate-200 mt-0.5">{request.existingCode}</p>
+          </div>
+        )}
+        {(request.finalDescription || finalDesc) && (
+          <div className="bg-white dark:bg-slate-800 rounded-lg p-2.5 border border-emerald-200/60 dark:border-emerald-700/60 sm:col-span-2">
+            <span className="text-[10px] uppercase font-bold text-emerald-600 dark:text-emerald-400 tracking-wide">Final Description</span>
+            <p className="font-mono text-slate-800 dark:text-slate-200 mt-0.5 text-xs">{request.finalDescription || finalDesc}</p>
+          </div>
+        )}
+        <div className="bg-white dark:bg-slate-800 rounded-lg p-2.5 border border-slate-200/60 dark:border-slate-700/60">
+          <span className="text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 tracking-wide">UOM</span>
+          <p className="font-mono text-slate-800 dark:text-slate-200 mt-0.5">{request.uom || editableUom || '-'}</p>
+        </div>
+      </div>
+    </div>
+  );
+
   // Workflow Action Handlers
   const handleManagerApprove = () => {
     updateRequestStatus(request.id, RequestStatus.SUBMITTED_TO_POC, comment || 'Approved by Manager');
@@ -199,12 +254,17 @@ export const RequestDetail: React.FC = () => {
     setReassignId('');
   };
 
+  // Feature #13: Updated to require technical reviewer selection & Feature #20: include UOM
   const handleSpecialistReview = () => {
     if (!finalDesc.trim()) {
       addToast('A description is required before sending for validation.', 'warning');
       return;
     }
-    updateRequestStatus(request.id, RequestStatus.UNDER_TECHNICAL_VALIDATION, comment || 'Sent for technical validation', { finalDescription: finalDesc });
+    if (!selectedReviewerId) {
+      addToast('Please select a technical reviewer.', 'warning');
+      return;
+    }
+    updateRequestStatus(request.id, RequestStatus.UNDER_TECHNICAL_VALIDATION, comment || 'Sent for technical validation', { finalDescription: finalDesc, technicalReviewerId: selectedReviewerId, uom: editableUom });
   };
 
   const handleTechValidation = () => {
@@ -221,6 +281,21 @@ export const RequestDetail: React.FC = () => {
       return;
     }
     updateRequestStatus(request.id, RequestStatus.COMPLETED, comment || 'Oracle code created', { oracleCode: oracleCode.trim(), finalDescription: request.finalDescription || request.generatedDescription });
+  };
+
+  // Feature #19: Amend & Return to Technical Review handler
+  const handleAmendAndReturn = () => {
+    if (!finalDesc.trim()) {
+      addToast('Final description cannot be empty for amendment.', 'warning');
+      return;
+    }
+    updateRequestStatus(
+      request.id,
+      RequestStatus.UNDER_TECHNICAL_VALIDATION,
+      comment || 'Description amended by coding team, sent back for technical review',
+      { finalDescription: finalDesc, uom: editableUom }
+    );
+    addToast('Request amended and returned to technical review.', 'success');
   };
 
   const handleReject = () => {
@@ -269,11 +344,52 @@ export const RequestDetail: React.FC = () => {
   const renderActions = () => {
     // Requester Actions
     if (currentUser.id === request.requesterId && (request.status === RequestStatus.REJECTED || request.status === RequestStatus.RETURNED_FOR_CLARIFICATION)) {
+      const returnRemarks = getSpecialistReturnRemarks();
       return (
-        <div className="flex gap-2">
-          <button onClick={() => navigate(`/requests/${request.id}/edit`)} aria-label={`Modify and resubmit request ${request.title}`} className="btn-primary text-white px-4 py-2 rounded-lg flex items-center gap-2 transition">
-            <RotateCcw size={16} strokeWidth={1.75} /> Modify & Resubmit
-          </button>
+        <div className="space-y-3">
+          {/* Feature #15: Specialist Remarks Visible to Requesters */}
+          {request.status === RequestStatus.RETURNED_FOR_CLARIFICATION && (
+            <>
+              {returnRemarks && returnRemarks.details && (
+                <div className="bg-amber-50 dark:bg-amber-950 border border-amber-200/60 dark:border-amber-700/60 rounded-xl p-3">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Info size={14} className="text-amber-600 dark:text-amber-400" />
+                    <span className="text-xs font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wide">Specialist Remarks</span>
+                  </div>
+                  <p className="text-sm text-amber-900 dark:text-amber-300">&ldquo;{returnRemarks.details}&rdquo;</p>
+                  <p className="text-xs text-amber-600 dark:text-amber-500 mt-1">
+                    &mdash; {returnRemarks.user}, {new Date(returnRemarks.timestamp).toLocaleString()}
+                  </p>
+                </div>
+              )}
+              {request.rejectionReason && (!returnRemarks || !returnRemarks.details) && (
+                <div className="bg-amber-50 dark:bg-amber-950 border border-amber-200/60 dark:border-amber-700/60 rounded-xl p-3">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Info size={14} className="text-amber-600 dark:text-amber-400" />
+                    <span className="text-xs font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wide">Specialist Remarks</span>
+                  </div>
+                  <p className="text-sm text-amber-900 dark:text-amber-300">&ldquo;{request.rejectionReason}&rdquo;</p>
+                </div>
+              )}
+              {request.clarificationThread && request.clarificationThread.length > 0 && (
+                <div className="bg-amber-50/50 dark:bg-amber-950/50 border border-amber-200/40 dark:border-amber-700/40 rounded-xl p-3">
+                  <span className="text-xs font-bold text-amber-600 dark:text-amber-500 uppercase tracking-wide">Latest Clarification Comments</span>
+                  <div className="mt-1 space-y-1">
+                    {request.clarificationThread.slice(-3).map(c => (
+                      <p key={c.id} className="text-xs text-amber-800 dark:text-amber-400">
+                        <span className="font-medium">{c.userName}:</span> {c.message}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+          <div className="flex gap-2">
+            <button onClick={() => navigate(`/requests/${request.id}/edit`)} aria-label={`Modify and resubmit request ${request.title}`} className="btn-primary text-white px-4 py-2 rounded-lg flex items-center gap-2 transition">
+              <RotateCcw size={16} strokeWidth={1.75} /> Modify & Resubmit
+            </button>
+          </div>
         </div>
       );
     }
@@ -345,11 +461,41 @@ export const RequestDetail: React.FC = () => {
     }
 
     if (currentUser.role === Role.SPECIALIST && request.assignedSpecialistId === currentUser.id && request.status === RequestStatus.UNDER_SPECIALIST_REVIEW) {
+      const technicalReviewers = users.filter(u => u.role === Role.TECHNICAL_REVIEWER);
       return (
         <div className="space-y-3">
+          {/* Feature #20: UOM Editable by Coding Team */}
+          <div>
+            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Unit of Measure (UOM)</label>
+            <input
+              type="text"
+              list="uom-options"
+              aria-label="Edit unit of measure"
+              className="w-full border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 text-sm focus:border-blue-500 focus:ring-blue-500/20 transition dark:bg-slate-700 dark:text-slate-200"
+              value={editableUom}
+              onChange={e => setEditableUom(e.target.value)}
+              placeholder="Select or type UOM..."
+            />
+            <datalist id="uom-options">
+              {commonUomValues.map(u => <option key={u} value={u} />)}
+            </datalist>
+          </div>
           <div>
             <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Draft Final Description</label>
             <textarea aria-label="Draft final description" className="w-full border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 text-sm font-mono focus:border-blue-500 focus:ring-blue-500/20 transition dark:bg-slate-700 dark:text-slate-200" rows={2} value={finalDesc} onChange={e => setFinalDesc(e.target.value)} placeholder="Edit the auto-generated description if needed..." />
+          </div>
+          {/* Feature #13: Technical Reviewer Selection Dropdown */}
+          <div>
+            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Select Technical Reviewer</label>
+            <select
+              aria-label="Select technical reviewer"
+              className="w-full border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 text-sm focus:border-blue-500 focus:ring-blue-500/20 transition dark:bg-slate-700 dark:text-slate-200"
+              value={selectedReviewerId}
+              onChange={e => setSelectedReviewerId(e.target.value)}
+            >
+              <option value="">Select Technical Reviewer...</option>
+              {technicalReviewers.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+            </select>
           </div>
           <div className="flex flex-wrap gap-2">
             <button onClick={handleSpecialistReview} aria-label={`Send request ${request.title} for technical validation`} className="btn-primary text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm transition">
@@ -366,13 +512,43 @@ export const RequestDetail: React.FC = () => {
       );
     }
 
-    // Specialist Code Creation
+    // Specialist Code Creation (PENDING_ORACLE_CREATION)
     if (currentUser.role === Role.SPECIALIST && request.status === RequestStatus.PENDING_ORACLE_CREATION) {
       return (
         <div className="space-y-3">
+          {/* Feature #22: Comprehensive Summary in Oracle Creation */}
+          {renderComprehensiveSummary()}
           <div className="bg-emerald-50 dark:bg-emerald-950 border border-emerald-200/60 dark:border-emerald-700/60 rounded-xl p-3">
             <p className="text-xs font-bold text-emerald-700 dark:text-emerald-400 uppercase mb-1 tracking-wide">Validated Description</p>
             <p className="font-mono text-sm text-emerald-900 dark:text-emerald-300">{request.finalDescription || request.generatedDescription}</p>
+          </div>
+          {/* Feature #19: Amend Description & Return to Technical Review */}
+          <div>
+            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Amend Final Description (optional)</label>
+            <textarea
+              aria-label="Amend final description"
+              className="w-full border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 text-sm font-mono focus:border-blue-500 focus:ring-blue-500/20 transition dark:bg-slate-700 dark:text-slate-200"
+              rows={2}
+              value={finalDesc}
+              onChange={e => setFinalDesc(e.target.value)}
+              placeholder="Edit the validated description if amendment is needed..."
+            />
+          </div>
+          {/* Feature #20: UOM editable in Oracle Creation */}
+          <div>
+            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Unit of Measure (UOM)</label>
+            <input
+              type="text"
+              list="uom-options-oracle"
+              aria-label="Edit unit of measure"
+              className="w-full border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 text-sm focus:border-blue-500 focus:ring-blue-500/20 transition dark:bg-slate-700 dark:text-slate-200"
+              value={editableUom}
+              onChange={e => setEditableUom(e.target.value)}
+              placeholder="Select or type UOM..."
+            />
+            <datalist id="uom-options-oracle">
+              {commonUomValues.map(u => <option key={u} value={u} />)}
+            </datalist>
           </div>
           <div className="flex gap-2 items-center">
             <input type="text" placeholder="Enter Oracle Code..." aria-label="Enter Oracle code" className="border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 flex-1 text-sm focus:border-blue-500 focus:ring-blue-500/20 transition dark:bg-slate-700 dark:text-slate-200" value={oracleCode} onChange={e => setOracleCode(e.target.value)} />
@@ -380,14 +556,26 @@ export const RequestDetail: React.FC = () => {
               <FileCheck size={14} strokeWidth={1.75} /> Complete
             </button>
           </div>
+          {/* Feature #19: Amend & Return to Technical Review button */}
+          <div className="flex gap-2 items-center border-t border-slate-200/60 dark:border-slate-700/60 pt-3">
+            <button
+              onClick={handleAmendAndReturn}
+              aria-label="Amend description and return to technical review"
+              className="bg-amber-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-amber-700 dark:hover:bg-amber-500 transition text-sm"
+            >
+              <CornerUpLeft size={14} strokeWidth={1.75} /> Amend & Return to Technical Review
+            </button>
+          </div>
         </div>
       );
     }
 
-    // Tech Reviewer Actions
+    // Tech Reviewer Actions (UNDER_TECHNICAL_VALIDATION)
     if (currentUser.role === Role.TECHNICAL_REVIEWER && request.status === RequestStatus.UNDER_TECHNICAL_VALIDATION) {
       return (
         <div className="space-y-3">
+          {/* Feature #22: Comprehensive Summary for Tech Reviewer */}
+          {renderComprehensiveSummary()}
           <div>
             <label className="block text-xs font-medium text-blue-700 dark:text-blue-400 mb-1 flex items-center gap-1"><Edit3 size={12} /> Final Description (Editable)</label>
             <textarea aria-label="Final description for validation" className="w-full border border-blue-300 dark:border-blue-600 rounded-lg p-2.5 text-sm font-mono focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-700 transition dark:bg-slate-700 dark:text-slate-200" rows={3} value={finalDesc} onChange={e => setFinalDesc(e.target.value)} />
