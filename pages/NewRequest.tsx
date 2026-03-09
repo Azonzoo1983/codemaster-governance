@@ -212,14 +212,18 @@ export const NewRequest: React.FC = () => {
     const errors: string[] = [];
     switch (stepNum) {
       case 2:
-        if (formData.requestType === 'Amendment' && !formData.existingCode?.trim()) {
-          errors.push('Existing Oracle Code is required for amendments.');
-        }
-        if (formData.requestType === 'Amendment' && !formData.existingDescription?.trim()) {
-          errors.push('Existing Oracle Description is required for amendments.');
-        }
-        if (formData.classification === Classification.SERVICE && !formData.serviceSubType) {
-          errors.push('Service Sub-Type is required.');
+        if (formData.requestType === 'Amendment') {
+          if (!formData.existingCode?.trim()) {
+            errors.push('Existing Oracle Code is required for amendments.');
+          }
+          if (!formData.existingDescription?.trim()) {
+            errors.push('Existing Oracle Description is required for amendments.');
+          }
+        } else {
+          // Classification/Sub-type validation only for New requests
+          if (formData.classification === Classification.SERVICE && !formData.serviceSubType) {
+            errors.push('Service Sub-Type is required.');
+          }
         }
         break;
       case 3:
@@ -645,73 +649,77 @@ export const NewRequest: React.FC = () => {
               </div>
             )}
 
-            {/* Classification */}
-            <div className="pt-4 border-t border-slate-100 dark:border-slate-700">
-              <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-3">Classification<HelpTooltip text="Choose 'Item' for physical materials/parts or 'Service' for service-based coding requests" /></label>
-              <div className="flex gap-4">
-                {[Classification.ITEM, Classification.SERVICE].map(c => (
-                  <button
-                    key={c}
-                    onClick={() => setFormData({
-                      ...formData,
-                      classification: c,
-                      materialSubType: c === Classification.ITEM ? MaterialSubType.DIRECT_NONSTOCK : undefined,
-                      serviceSubType: c === Classification.SERVICE ? undefined : undefined,
-                      attributes: {},
-                    })}
-                    className={`flex-1 py-3.5 border-2 rounded-lg text-center font-semibold transition-all ${
-                      formData.classification === c
-                        ? 'bg-slate-800 dark:bg-slate-200 text-white dark:text-slate-800 border-slate-800 dark:border-slate-200 shadow-premium'
-                        : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-300 dark:border-slate-600 hover:border-slate-400 dark:hover:border-slate-500'
-                    }`}
-                  >
-                    {c === Classification.ITEM ? 'Material (Item)' : 'Service'}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Sub-Type Selection */}
-            {formData.classification === Classification.ITEM && (
-              <div>
-                <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-3">Material Sub-Type</label>
-                <div className="grid grid-cols-3 gap-3">
-                  {Object.values(MaterialSubType).map(st => (
-                    <button
-                      key={st}
-                      onClick={() => setFormData({ ...formData, materialSubType: st })}
-                      className={`p-3 border-2 rounded-lg text-center text-sm font-medium transition-all ${
-                        formData.materialSubType === st
-                          ? 'border-blue-600 dark:border-blue-500 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 ring-1 ring-blue-600/10 dark:ring-blue-500/20'
-                          : 'border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:border-slate-400 dark:hover:border-slate-500'
-                      }`}
-                    >
-                      {st}
-                    </button>
-                  ))}
+            {/* Classification — only shown for New requests, not Amendments */}
+            {formData.requestType !== 'Amendment' && (
+              <>
+                <div className="pt-4 border-t border-slate-100 dark:border-slate-700">
+                  <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-3">Classification<HelpTooltip text="Choose 'Item' for physical materials/parts or 'Service' for service-based coding requests" /></label>
+                  <div className="flex gap-4">
+                    {[Classification.ITEM, Classification.SERVICE].map(c => (
+                      <button
+                        key={c}
+                        onClick={() => setFormData({
+                          ...formData,
+                          classification: c,
+                          materialSubType: c === Classification.ITEM ? MaterialSubType.DIRECT_NONSTOCK : undefined,
+                          serviceSubType: c === Classification.SERVICE ? undefined : undefined,
+                          attributes: {},
+                        })}
+                        className={`flex-1 py-3.5 border-2 rounded-lg text-center font-semibold transition-all ${
+                          formData.classification === c
+                            ? 'bg-slate-800 dark:bg-slate-200 text-white dark:text-slate-800 border-slate-800 dark:border-slate-200 shadow-premium'
+                            : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-300 dark:border-slate-600 hover:border-slate-400 dark:hover:border-slate-500'
+                        }`}
+                      >
+                        {c === Classification.ITEM ? 'Material (Item)' : 'Service'}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
 
-            {formData.classification === Classification.SERVICE && (
-              <div>
-                <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-3">Service Sub-Type <span className="text-red-500">*</span></label>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  {Object.values(ServiceSubType).map(st => (
-                    <button
-                      key={st}
-                      onClick={() => setFormData({ ...formData, serviceSubType: st })}
-                      className={`p-3 border-2 rounded-lg text-center text-sm font-medium transition-all ${
-                        formData.serviceSubType === st
-                          ? 'border-blue-600 dark:border-blue-500 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 ring-1 ring-blue-600/10 dark:ring-blue-500/20'
-                          : 'border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:border-slate-400 dark:hover:border-slate-500'
-                      }`}
-                    >
-                      {st}
-                    </button>
-                  ))}
-                </div>
-              </div>
+                {/* Sub-Type Selection */}
+                {formData.classification === Classification.ITEM && (
+                  <div>
+                    <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-3">Material Sub-Type</label>
+                    <div className="grid grid-cols-3 gap-3">
+                      {Object.values(MaterialSubType).map(st => (
+                        <button
+                          key={st}
+                          onClick={() => setFormData({ ...formData, materialSubType: st })}
+                          className={`p-3 border-2 rounded-lg text-center text-sm font-medium transition-all ${
+                            formData.materialSubType === st
+                              ? 'border-blue-600 dark:border-blue-500 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 ring-1 ring-blue-600/10 dark:ring-blue-500/20'
+                              : 'border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:border-slate-400 dark:hover:border-slate-500'
+                          }`}
+                        >
+                          {st}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {formData.classification === Classification.SERVICE && (
+                  <div>
+                    <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-3">Service Sub-Type <span className="text-red-500">*</span></label>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                      {Object.values(ServiceSubType).map(st => (
+                        <button
+                          key={st}
+                          onClick={() => setFormData({ ...formData, serviceSubType: st })}
+                          className={`p-3 border-2 rounded-lg text-center text-sm font-medium transition-all ${
+                            formData.serviceSubType === st
+                              ? 'border-blue-600 dark:border-blue-500 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 ring-1 ring-blue-600/10 dark:ring-blue-500/20'
+                              : 'border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:border-slate-400 dark:hover:border-slate-500'
+                        }`}
+                        >
+                          {st}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
             )}
 
             {/* Navigation */}
