@@ -11,4 +11,5 @@ export { useLayoutStore, getDefaultWidgetsForRole } from './layoutStore';
 export type { DashboardWidget } from './layoutStore';
 export { useWorkflowStore } from './workflowStore';
 export type { WorkflowConfig } from './workflowStore';
+export { useBrandStore } from './brandStore';
 export { useInitializeStores } from './initializeStores';

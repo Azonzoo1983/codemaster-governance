@@ -138,6 +138,38 @@ export const Reports: React.FC = () => {
     }).filter(s => s.assigned > 0);
   }, [requests, users, priorities]);
 
+  // By Requester
+  const byRequesterData = useMemo(() => {
+    const counts: Record<string, number> = {};
+    requests.forEach(r => {
+      const user = users.find(u => u.id === r.requesterId);
+      const name = user?.name || 'Unknown';
+      counts[name] = (counts[name] || 0) + 1;
+    });
+    return Object.entries(counts).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count).slice(0, 10);
+  }, [requests, users]);
+
+  // By Project
+  const byProjectData = useMemo(() => {
+    const counts: Record<string, number> = {};
+    requests.forEach(r => {
+      const proj = r.project || 'Unassigned';
+      counts[proj] = (counts[proj] || 0) + 1;
+    });
+    return Object.entries(counts).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count).slice(0, 10);
+  }, [requests]);
+
+  // By Department/Division
+  const byDepartmentData = useMemo(() => {
+    const counts: Record<string, number> = {};
+    requests.forEach(r => {
+      const user = users.find(u => u.id === r.requesterId);
+      const dept = user?.department || 'Unknown';
+      counts[dept] = (counts[dept] || 0) + 1;
+    });
+    return Object.entries(counts).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
+  }, [requests, users]);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center gap-4">
@@ -348,6 +380,74 @@ export const Reports: React.FC = () => {
           </div>
         </div>
       )}
+      {/* By Requester */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-premium border border-slate-200/60 dark:border-slate-700/60">
+          <h3 className="font-bold text-slate-800 dark:text-slate-100 mb-4 flex items-center gap-2">
+            <Users size={18} /> Requests by User
+          </h3>
+          {byRequesterData.length > 0 ? (
+            <div className="h-[300px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={byRequesterData} layout="vertical">
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis type="number" />
+                  <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 12 }} />
+                  <Tooltip />
+                  <Bar dataKey="count" fill="#2563eb" radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <p className="text-slate-400 text-center py-8">No data available</p>
+          )}
+        </div>
+
+        {/* By Project */}
+        <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-premium border border-slate-200/60 dark:border-slate-700/60">
+          <h3 className="font-bold text-slate-800 dark:text-slate-100 mb-4 flex items-center gap-2">
+            <Target size={18} /> Requests by Project
+          </h3>
+          {byProjectData.length > 0 ? (
+            <div className="h-[300px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={byProjectData} layout="vertical">
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis type="number" />
+                  <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 12 }} />
+                  <Tooltip />
+                  <Bar dataKey="count" fill="#10b981" radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <p className="text-slate-400 text-center py-8">No data available</p>
+          )}
+        </div>
+      </div>
+
+      {/* By Department/Division */}
+      <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-premium border border-slate-200/60 dark:border-slate-700/60">
+        <h3 className="font-bold text-slate-800 dark:text-slate-100 mb-4 flex items-center gap-2">
+          <Users size={18} /> Requests by Department
+        </h3>
+        {byDepartmentData.length > 0 ? (
+          <div className="h-[300px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={byDepartmentData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                <YAxis />
+                <Tooltip />
+                <Bar dataKey="count" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <p className="text-slate-400 text-center py-8">No data available</p>
+        )}
+      </div>
+
       </div>{/* end reports-content */}
     </div>
   );

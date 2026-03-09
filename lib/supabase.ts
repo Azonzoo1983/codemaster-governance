@@ -70,4 +70,5 @@ export const TABLES = {
   attributes: 'cm_attributes',
   requests: 'cm_requests',
   inviteTokens: 'cm_invite_tokens',
+  brands: 'cm_brands',
 } as const;

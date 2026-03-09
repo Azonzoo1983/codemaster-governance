@@ -5,6 +5,7 @@ import {
   AttributeDefinition,
   RequestItem,
   InviteToken,
+  Brand,
   MOCK_USERS,
   MOCK_PRIORITIES,
   MOCK_ATTRIBUTES,
@@ -14,6 +15,7 @@ import { useUserStore } from './userStore';
 import { useAdminStore } from './adminStore';
 import { useRequestStore } from './requestStore';
 import { useInviteStore } from './inviteStore';
+import { useBrandStore } from './brandStore';
 
 /**
  * Custom hook that loads all data from Supabase and sets up real-time subscriptions.
@@ -68,6 +70,10 @@ export function useInitializeStores(): boolean {
 
         setRequests(dbRequests);
         setInviteTokens(dbTokens);
+
+        // Load brands
+        const dbBrands = await loadAll<Brand>(TABLES.brands);
+        useBrandStore.getState().setBrands(dbBrands);
 
         // Resolve current user from localStorage
         const allUsers = dbUsers.length > 0 ? dbUsers : MOCK_USERS;

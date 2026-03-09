@@ -16,6 +16,7 @@ import { WelcomeCard } from '../components/WelcomeCard';
 import { EmptyState } from '../components/EmptyState';
 import { FilterPresets } from '../components/FilterPresets';
 import type { FilterPreset } from '../components/FilterPresets';
+import { BulkUpload } from '../components/BulkUpload';
 
 const PAGE_SIZE = 15;
 const ANALYTICS_COLORS = ['#2563eb', '#f59e0b', '#ef4444', '#10b981', '#8b5cf6'];
@@ -40,6 +41,7 @@ export const Dashboard: React.FC = () => {
   const addToast = useToastStore((s) => s.addToast);
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [showPerformance, setShowPerformance] = useState(false);
+  const [showBulkUpload, setShowBulkUpload] = useState(false);
   const [showLayoutEditor, setShowLayoutEditor] = useState(false);
   const [welcomeDismissed, setWelcomeDismissed] = useState(() => localStorage.getItem('cm-welcome-dismissed') === 'true');
 
@@ -231,7 +233,7 @@ export const Dashboard: React.FC = () => {
       }
 
       // Status filter
-      if (filterStatus === 'active' && (r.status === RequestStatus.COMPLETED || r.status === RequestStatus.REJECTED)) return false;
+      if (filterStatus === 'active' && (r.status === RequestStatus.COMPLETED || r.status === RequestStatus.REJECTED || r.status === RequestStatus.CANCELLED)) return false;
       if (filterStatus === 'completed' && r.status !== RequestStatus.COMPLETED) return false;
       if (filterStatus === 'attention' && r.status !== RequestStatus.REJECTED && r.status !== RequestStatus.RETURNED_FOR_CLARIFICATION) return false;
 
@@ -315,6 +317,7 @@ export const Dashboard: React.FC = () => {
       case RequestStatus.UNDER_SPECIALIST_REVIEW: return 'bg-violet-50 text-violet-700 ring-1 ring-violet-600/10 dark:bg-violet-950 dark:text-violet-400 dark:ring-violet-500/20';
       case RequestStatus.UNDER_TECHNICAL_VALIDATION: return 'bg-cyan-50 text-cyan-700 ring-1 ring-cyan-600/10 dark:bg-cyan-950 dark:text-cyan-400 dark:ring-cyan-500/20';
       case RequestStatus.PENDING_ORACLE_CREATION: return 'bg-teal-50 text-teal-700 ring-1 ring-teal-600/10 dark:bg-teal-950 dark:text-teal-400 dark:ring-teal-500/20';
+      case RequestStatus.CANCELLED: return 'bg-gray-100 text-gray-600 ring-1 ring-gray-600/10 dark:bg-gray-800 dark:text-gray-400 dark:ring-gray-500/20';
       default: return 'bg-slate-50 text-slate-700 ring-1 ring-slate-600/10 dark:bg-slate-800 dark:text-slate-400 dark:ring-slate-500/20';
     }
   };
@@ -330,7 +333,7 @@ export const Dashboard: React.FC = () => {
 
   // SLA Badge calculation (using business hours)
   const getSLABadge = (req: RequestItem) => {
-    if (req.status === RequestStatus.COMPLETED || req.status === RequestStatus.REJECTED) return null;
+    if (req.status === RequestStatus.COMPLETED || req.status === RequestStatus.REJECTED || req.status === RequestStatus.CANCELLED) return null;
     const p = priorities.find(p => p.id === req.priorityId);
     if (!p?.slaHours) return null;
     const elapsed = calculateBusinessHours(req.createdAt, new Date());
@@ -359,11 +362,12 @@ export const Dashboard: React.FC = () => {
       return true;
     });
     return {
-      active: all.filter(r => r.status !== RequestStatus.COMPLETED && r.status !== RequestStatus.REJECTED).length,
+      active: all.filter(r => r.status !== RequestStatus.COMPLETED && r.status !== RequestStatus.REJECTED && r.status !== RequestStatus.CANCELLED).length,
       completed: all.filter(r => r.status === RequestStatus.COMPLETED).length,
+      cancelled: all.filter(r => r.status === RequestStatus.CANCELLED).length,
       attention: all.filter(r => r.status === RequestStatus.REJECTED || r.status === RequestStatus.RETURNED_FOR_CLARIFICATION).length,
       breached: all.filter(r => {
-        if (r.status === RequestStatus.COMPLETED || r.status === RequestStatus.REJECTED) return false;
+        if (r.status === RequestStatus.COMPLETED || r.status === RequestStatus.REJECTED || r.status === RequestStatus.CANCELLED) return false;
         const p = priorities.find(p => p.id === r.priorityId);
         if (!p?.slaHours) return false;
         const elapsed = calculateBusinessHours(r.createdAt, new Date());
@@ -392,7 +396,7 @@ export const Dashboard: React.FC = () => {
     const specs = users.filter(u => u.role === Role.SPECIALIST);
     return specs.map(s => ({
       name: s.name.split(' ')[0],
-      active: requests.filter(r => r.assignedSpecialistId === s.id && r.status !== RequestStatus.COMPLETED && r.status !== RequestStatus.REJECTED).length,
+      active: requests.filter(r => r.assignedSpecialistId === s.id && r.status !== RequestStatus.COMPLETED && r.status !== RequestStatus.REJECTED && r.status !== RequestStatus.CANCELLED).length,
     })).filter(s => s.active > 0);
   }, [requests, users]);
 
@@ -404,6 +408,30 @@ export const Dashboard: React.FC = () => {
       counts[pName] = (counts[pName] || 0) + 1;
     });
     return Object.entries(counts).map(([name, value]) => ({ name, value }));
+  }, [requests, priorities]);
+
+  // Coding Performance Metrics
+  const performanceMetrics = useMemo(() => {
+    const completed = requests.filter(r => r.status === RequestStatus.COMPLETED);
+    if (completed.length === 0) return { avgTime: 'N/A', slaRate: 'N/A' };
+
+    const avgHours = completed.reduce((sum, r) => {
+      const created = new Date(r.createdAt).getTime();
+      const updated = new Date(r.updatedAt).getTime();
+      return sum + (updated - created) / (1000 * 60 * 60);
+    }, 0) / completed.length;
+
+    const onTime = completed.filter(r => {
+      const prio = priorities.find(p => p.id === r.priorityId);
+      if (!prio?.slaHours) return true;
+      const hours = (new Date(r.updatedAt).getTime() - new Date(r.createdAt).getTime()) / (1000 * 60 * 60);
+      return hours <= prio.slaHours;
+    }).length;
+
+    return {
+      avgTime: avgHours < 24 ? `${Math.round(avgHours)}h` : `${Math.round(avgHours / 24)}d`,
+      slaRate: `${Math.round((onTime / completed.length) * 100)}%`,
+    };
   }, [requests, priorities]);
 
   const userRequestCount = useMemo(() => {
@@ -455,13 +483,21 @@ export const Dashboard: React.FC = () => {
             <FileSpreadsheet size={18} strokeWidth={1.75} />
           </button>
           {(currentUser.role === Role.REQUESTER || currentUser.role === Role.ADMIN) && (
-            <button
-              onClick={() => navigate('/requests/new')}
-              className="btn-primary text-white px-5 py-2.5 rounded-lg flex items-center gap-2 font-medium text-sm shadow-sm"
-            >
-              <FileText size={18} />
-              Create Request
-            </button>
+            <>
+              <button
+                onClick={() => setShowBulkUpload(true)}
+                className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition text-sm font-medium"
+              >
+                <FileSpreadsheet size={16} /> Bulk Upload
+              </button>
+              <button
+                onClick={() => navigate('/requests/new')}
+                className="btn-primary text-white px-5 py-2.5 rounded-lg flex items-center gap-2 font-medium text-sm shadow-sm"
+              >
+                <FileText size={18} />
+                Create Request
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -605,6 +641,28 @@ export const Dashboard: React.FC = () => {
                         No request data available
                       </div>
                     )}
+                  </div>
+
+                  {/* Widget 4: Coding Performance */}
+                  <div className="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-premium border border-slate-200/60 dark:border-slate-700/60">
+                    <div className="flex items-center gap-2 mb-4">
+                      <Award size={16} className="text-purple-500" />
+                      <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Coding Performance</h3>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <div className="text-2xl font-bold text-slate-800 dark:text-slate-200">
+                          {performanceMetrics.avgTime}
+                        </div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400">Avg. Completion Time</div>
+                      </div>
+                      <div>
+                        <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+                          {performanceMetrics.slaRate}
+                        </div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400">SLA Compliance</div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
@@ -1136,6 +1194,8 @@ export const Dashboard: React.FC = () => {
           </button>
         </div>
       )}
+
+      {showBulkUpload && <BulkUpload onClose={() => setShowBulkUpload(false)} />}
     </div>
   );
 };

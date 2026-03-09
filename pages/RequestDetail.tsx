@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useRequestStore, useUserStore, useAdminStore, useToastStore } from '../stores';
-import { RequestStatus, Role, Classification, ClarificationComment } from '../types';
+import { RequestStatus, Role, Classification, ClarificationComment, hasRole } from '../types';
 import { DynamicForm } from '../components/DynamicForm';
 import { calculateBusinessHours, formatBusinessHours } from '../lib/businessHours';
-import { ArrowLeft, CheckCircle, XCircle, UserPlus, AlertTriangle, FileCheck, Mail, Edit3, RotateCcw, CornerUpLeft, Paperclip, Download, User as UserIcon, MessageSquare, Send, Clock, RefreshCw, FileDown, Eye, Info, ListChecks } from 'lucide-react';
+import { ArrowLeft, CheckCircle, XCircle, UserPlus, AlertTriangle, FileCheck, Mail, Edit3, RotateCcw, CornerUpLeft, Paperclip, Download, User as UserIcon, MessageSquare, Send, Clock, RefreshCw, FileDown, Eye, Info, ListChecks, Ban } from 'lucide-react';
 import { exportRequestPdf } from '../lib/exportRequestPdf';
 import { SLACountdown } from '../components/SLACountdown';
 import { RequestTimeline } from '../components/RequestTimeline';
@@ -36,6 +36,9 @@ export const RequestDetail: React.FC = () => {
   const [mentionCursorPos, setMentionCursorPos] = useState(0);
   const [selectedReviewerId, setSelectedReviewerId] = useState('');
   const [editableUom, setEditableUom] = useState('');
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancellationReason, setCancellationReason] = useState('');
+  const [shortDesc, setShortDesc] = useState(request?.shortDescription || request?.generatedDescription?.slice(0, 240) || '');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatTextareaRef = useRef<HTMLTextAreaElement>(null);
   const mentionDropdownRef = useRef<HTMLDivElement>(null);
@@ -216,8 +219,16 @@ export const RequestDetail: React.FC = () => {
           </div>
         )}
         {(request.finalDescription || finalDesc) && (
-          <div className="bg-white dark:bg-slate-800 rounded-lg p-2.5 border border-emerald-200/60 dark:border-emerald-700/60 sm:col-span-2">
-            <span className="text-[10px] uppercase font-bold text-emerald-600 dark:text-emerald-400 tracking-wide">Final Description</span>
+          <div className={`bg-white dark:bg-slate-800 rounded-lg p-2.5 sm:col-span-2 ${
+            request.specialistDescription && request.finalDescription && request.specialistDescription !== request.finalDescription
+              ? 'border border-amber-300/60 dark:border-amber-600/60 bg-amber-50 dark:bg-amber-950/30'
+              : 'border border-emerald-200/60 dark:border-emerald-700/60'
+          }`}>
+            <span className={`text-[10px] uppercase font-bold tracking-wide ${
+              request.specialistDescription && request.finalDescription && request.specialistDescription !== request.finalDescription
+                ? 'text-amber-600 dark:text-amber-400'
+                : 'text-emerald-600 dark:text-emerald-400'
+            }`}>Final Description {request.specialistDescription && request.finalDescription && request.specialistDescription !== request.finalDescription ? '(Amended)' : ''}</span>
             <p className="font-mono text-slate-800 dark:text-slate-200 mt-0.5 text-xs">{request.finalDescription || finalDesc}</p>
           </div>
         )}
@@ -264,7 +275,7 @@ export const RequestDetail: React.FC = () => {
       addToast('Please select a technical reviewer.', 'warning');
       return;
     }
-    updateRequestStatus(request.id, RequestStatus.UNDER_TECHNICAL_VALIDATION, comment || 'Sent for technical validation', { finalDescription: finalDesc, technicalReviewerId: selectedReviewerId, uom: editableUom });
+    updateRequestStatus(request.id, RequestStatus.UNDER_TECHNICAL_VALIDATION, comment || 'Sent for technical validation', { finalDescription: finalDesc, technicalReviewerId: selectedReviewerId, uom: editableUom, specialistDescription: finalDesc || request.generatedDescription, shortDescription: shortDesc });
   };
 
   const handleTechValidation = () => {
@@ -339,6 +350,20 @@ export const RequestDetail: React.FC = () => {
     }
     // Simulate brief sending delay for UX feedback
     setTimeout(() => setIsSendingChat(false), 300);
+  };
+
+  const handleCancelRequest = () => {
+    if (!cancellationReason.trim()) {
+      addToast('Please provide a reason for cancellation.', 'warning');
+      return;
+    }
+    updateRequestStatus(request.id, RequestStatus.CANCELLED, cancellationReason, {
+      cancelledAt: new Date().toISOString(),
+      cancelledBy: currentUser.id,
+      cancellationReason: cancellationReason,
+    });
+    setShowCancelModal(false);
+    setCancellationReason('');
   };
 
   const renderActions = () => {
@@ -484,6 +509,18 @@ export const RequestDetail: React.FC = () => {
             <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Draft Final Description</label>
             <textarea aria-label="Draft final description" className="w-full border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 text-sm font-mono focus:border-blue-500 focus:ring-blue-500/20 transition dark:bg-slate-700 dark:text-slate-200" rows={2} value={finalDesc} onChange={e => setFinalDesc(e.target.value)} placeholder="Edit the auto-generated description if needed..." />
           </div>
+          <div className="mt-4">
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Short Description (240 chars max)</label>
+            <input
+              type="text"
+              maxLength={240}
+              className="w-full rounded-lg border-slate-300 dark:border-slate-600 shadow-sm border p-2.5 focus:border-blue-500 focus:ring-blue-500/20 transition bg-white dark:bg-slate-700 dark:text-slate-200"
+              value={shortDesc}
+              onChange={(e) => setShortDesc(e.target.value)}
+              placeholder="Short description for Oracle..."
+            />
+            <div className="text-xs text-slate-400 text-right mt-1">{shortDesc.length}/240</div>
+          </div>
           {/* Feature #13: Technical Reviewer Selection Dropdown */}
           <div>
             <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Select Technical Reviewer</label>
@@ -622,6 +659,7 @@ export const RequestDetail: React.FC = () => {
           <SLACountdown request={request} priority={priority} expanded />
           <span role="status" aria-label={`Status: ${request.status}`} className={`badge-refined ring-1 font-bold ${
             request.status === RequestStatus.REJECTED ? 'bg-rose-50 text-rose-800 ring-rose-600/10 dark:bg-rose-950 dark:text-rose-400' :
+            request.status === RequestStatus.CANCELLED ? 'bg-slate-100 text-slate-700 ring-slate-400/20 dark:bg-slate-800 dark:text-slate-400' :
             request.status === RequestStatus.RETURNED_FOR_CLARIFICATION ? 'bg-amber-50 text-amber-800 ring-amber-600/10 dark:bg-amber-950 dark:text-amber-400' :
             request.status === RequestStatus.COMPLETED ? 'bg-emerald-50 text-emerald-800 ring-emerald-600/10 dark:bg-emerald-950 dark:text-emerald-400' :
             'bg-blue-50 text-blue-800 ring-blue-600/10 dark:bg-blue-950 dark:text-blue-400'
@@ -636,8 +674,39 @@ export const RequestDetail: React.FC = () => {
         <RequestTimeline stageTimestamps={stageTimestamps} currentStatus={request.status} />
       )}
 
+      {request.status === RequestStatus.CANCELLED && (
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4 mb-6">
+          <div className="flex items-center gap-2 text-red-700 dark:text-red-400 font-semibold mb-1">
+            <Ban size={16} /> Request Cancelled
+          </div>
+          <p className="text-sm text-red-600 dark:text-red-500">
+            {request.cancellationReason || 'No reason provided'}
+          </p>
+          <p className="text-xs text-red-500 dark:text-red-600 mt-1">
+            Cancelled on {request.cancelledAt ? new Date(request.cancelledAt).toLocaleString() : 'Unknown date'}
+          </p>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
+          {request.requestType === 'Amendment' && (
+            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 mb-4">
+              <h4 className="text-sm font-semibold text-amber-700 dark:text-amber-400 mb-2">Amendment Details</h4>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span className="text-slate-500 dark:text-slate-400">Existing Code:</span>
+                  <span className="ml-2 font-mono font-semibold text-slate-800 dark:text-slate-200">{request.existingCode}</span>
+                </div>
+                {request.existingDescription && (
+                  <div className="col-span-2">
+                    <span className="text-slate-500 dark:text-slate-400">Existing Description:</span>
+                    <p className="mt-1 font-mono text-slate-800 dark:text-slate-200 bg-white dark:bg-slate-800 p-2 rounded border border-slate-200 dark:border-slate-600">{request.existingDescription}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
           {/* Technical Attributes */}
           <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-premium border border-slate-200/60 dark:border-slate-700/60">
             <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4 border-b border-slate-200/60 dark:border-slate-700/60 pb-2">Technical Attributes</h3>
@@ -657,10 +726,48 @@ export const RequestDetail: React.FC = () => {
                 <div className="text-base font-mono text-emerald-900 dark:text-emerald-300 mt-1">{request.finalDescription}</div>
               </div>
             )}
+            {/* Description Comparison */}
+            {request.specialistDescription && request.finalDescription &&
+             request.specialistDescription !== request.finalDescription && (
+              <div className="mt-4 space-y-2">
+                <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Description Changes</h4>
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
+                  <div className="text-xs font-semibold text-red-600 dark:text-red-400 mb-1">Original (Specialist)</div>
+                  <p className="text-sm text-red-800 dark:text-red-300 font-mono">{request.specialistDescription}</p>
+                </div>
+                <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3">
+                  <div className="text-xs font-semibold text-green-600 dark:text-green-400 mb-1">Amended (Final)</div>
+                  <p className="text-sm text-green-800 dark:text-green-300 font-mono">{request.finalDescription}</p>
+                </div>
+              </div>
+            )}
             {request.oracleCode && (
               <div className="mt-4 p-4 bg-gradient-to-r from-slate-800 to-slate-900 rounded-xl text-white shadow-lg">
                 <span className="text-xs uppercase font-bold text-slate-400 tracking-wide">Oracle Code</span>
                 <div className="text-2xl font-bold mt-1 tracking-wider">{request.oracleCode}</div>
+              </div>
+            )}
+            {/* Short & Long Descriptions */}
+            {(request.shortDescription || request.longDescription) && (
+              <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                {request.shortDescription && (
+                  <div>
+                    <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Short Description</div>
+                    <div className="bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-lg p-3 text-sm text-slate-800 dark:text-slate-200 font-mono">
+                      {request.shortDescription}
+                    </div>
+                    <div className="text-xs text-slate-400 text-right mt-1">{request.shortDescription.length}/240</div>
+                  </div>
+                )}
+                {request.longDescription && (
+                  <div>
+                    <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Long Description</div>
+                    <div className="bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-lg p-3 text-sm text-slate-800 dark:text-slate-200 font-mono">
+                      {request.longDescription}
+                    </div>
+                    <div className="text-xs text-slate-400 text-right mt-1">{request.longDescription.length}/500</div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -816,6 +923,20 @@ export const RequestDetail: React.FC = () => {
                   <textarea aria-label="Workflow action comment" className="w-full border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 text-sm focus:border-blue-500 focus:ring-blue-500/20 transition dark:bg-slate-700 dark:text-slate-200" placeholder="Add comments (required for rejection/return)..." value={comment} onChange={e => setComment(e.target.value)} rows={2} />
                 )}
                 {renderActions()}
+                {/* Cancel Request Button */}
+                {request.status !== RequestStatus.COMPLETED &&
+                 request.status !== RequestStatus.CANCELLED &&
+                 request.status !== RequestStatus.REJECTED &&
+                 (currentUser.id === request.requesterId || hasRole(currentUser, Role.ADMIN) || hasRole(currentUser, Role.POC)) && (
+                  <div className="mt-6 pt-4 border-t border-slate-200 dark:border-slate-700">
+                    <button
+                      onClick={() => setShowCancelModal(true)}
+                      className="w-full py-2.5 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/40 transition flex items-center justify-center gap-2 text-sm font-medium"
+                    >
+                      <Ban size={16} /> Cancel Request
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -937,6 +1058,34 @@ export const RequestDetail: React.FC = () => {
           </div>
         </div>
       </div>
+      {/* Cancel Confirmation Modal */}
+      {showCancelModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md p-6">
+            <h3 className="text-lg font-bold text-red-600 dark:text-red-400 mb-4 flex items-center gap-2">
+              <Ban size={20} /> Cancel Request
+            </h3>
+            <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+              Are you sure you want to cancel request <strong>{request.id}</strong>? This action will be tracked in the audit trail.
+            </p>
+            <textarea
+              className="w-full rounded-lg border-slate-300 dark:border-slate-600 shadow-sm border p-2.5 focus:border-red-500 focus:ring-red-500/20 transition bg-white dark:bg-slate-700 dark:text-slate-200 mb-4"
+              rows={3}
+              value={cancellationReason}
+              onChange={(e) => setCancellationReason(e.target.value)}
+              placeholder="Reason for cancellation (required)..."
+            />
+            <div className="flex gap-3 justify-end">
+              <button onClick={() => setShowCancelModal(false)} className="px-4 py-2 text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition">
+                Keep Request
+              </button>
+              <button onClick={handleCancelRequest} className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition">
+                Confirm Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

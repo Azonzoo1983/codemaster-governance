@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useUserStore, useAdminStore, useRequestStore, useToastStore } from '../stores';
+import { useUserStore, useAdminStore, useRequestStore, useToastStore, useBrandStore } from '../stores';
 import { Classification, MaterialSubType, ServiceSubType, RequestStatus, RequestItem, AttributeType } from '../types';
 import { DynamicForm } from '../components/DynamicForm';
 import { ArrowLeft, ArrowRight, Send, Info, AlertTriangle, CheckCircle, Paperclip, X, FileText, Eye, Upload, UploadCloud, Loader2, Save } from 'lucide-react';
 import { uploadFile, validateFile, formatFileSize } from '../lib/fileUpload';
 import { HelpTooltip } from '../components/HelpTooltip';
+import { UnspscSearch } from '../components/UnspscSearch';
 
 const MAX_ATTACHMENT_SIZE = 10_000_000; // 10MB (upgraded with Supabase Storage)
 const TOTAL_STEPS = 4;
@@ -25,6 +26,7 @@ export const NewRequest: React.FC = () => {
   const requests = useRequestStore((s) => s.requests);
   const users = useUserStore((s) => s.users);
   const addToast = useToastStore((s) => s.addToast);
+  const brands = useBrandStore((s) => s.brands);
 
   const [step, setStep] = useState(1);
   const [dbChecked, setDbChecked] = useState(false);
@@ -187,7 +189,7 @@ export const NewRequest: React.FC = () => {
       }
     });
 
-    return parts.join(', ');
+    return parts.join(' ');
   }, [relevantAttributes]);
 
   // Real-time auto-description update
@@ -213,6 +215,9 @@ export const NewRequest: React.FC = () => {
         if (formData.requestType === 'Amendment' && !formData.existingCode?.trim()) {
           errors.push('Existing Oracle Code is required for amendments.');
         }
+        if (formData.requestType === 'Amendment' && !formData.existingDescription?.trim()) {
+          errors.push('Existing Oracle Description is required for amendments.');
+        }
         if (formData.classification === Classification.SERVICE && !formData.serviceSubType) {
           errors.push('Service Sub-Type is required.');
         }
@@ -223,10 +228,8 @@ export const NewRequest: React.FC = () => {
         relevantAttributes.filter(a => a.mandatory).forEach(a => {
           const val = formData.attributes?.[a.id];
           if (a.type === AttributeType.DIMENSION_BLOCK) {
-            const dimVal = val as Record<string, string | number> | undefined;
-            if (!dimVal || Object.values(dimVal).every(v => !v)) {
-              errors.push(`${a.name} is required.`);
-            }
+            // Dimensions are optional per user feedback - skip mandatory validation
+            return;
           } else if (a.type === AttributeType.NUMERIC_UNIT) {
             const numVal = val as Record<string, string | number> | undefined;
             if (!numVal?.value) errors.push(`${a.name} is required.`);
@@ -317,6 +320,9 @@ export const NewRequest: React.FC = () => {
         managerId: linkedManagerId,
         requestType: formData.requestType || 'New',
         existingCode: formData.existingCode || '',
+        shortDescription: formData.shortDescription || '',
+        longDescription: formData.longDescription || '',
+        existingDescription: formData.existingDescription || '',
         materialType: formData.materialType || '',
         materialSubType: formData.materialSubType,
         serviceType: formData.serviceType || '',
@@ -623,6 +629,19 @@ export const NewRequest: React.FC = () => {
                   aria-required="true"
                   aria-label="Existing Oracle Code"
                 />
+                {/* Existing Oracle Description */}
+                <div className="mt-4">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    Existing Oracle Description <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    className="w-full rounded-lg border-slate-300 dark:border-slate-600 shadow-sm border p-2.5 focus:border-blue-500 focus:ring-blue-500/20 transition bg-white dark:bg-slate-700 dark:text-slate-200"
+                    rows={2}
+                    value={formData.existingDescription || ''}
+                    onChange={(e) => setFormData({ ...formData, existingDescription: e.target.value })}
+                    placeholder="Enter the current Oracle description..."
+                  />
+                </div>
               </div>
             )}
 
@@ -656,7 +675,7 @@ export const NewRequest: React.FC = () => {
             {formData.classification === Classification.ITEM && (
               <div>
                 <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-3">Material Sub-Type</label>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-3 gap-3">
                   {Object.values(MaterialSubType).map(st => (
                     <button
                       key={st}
@@ -737,6 +756,79 @@ export const NewRequest: React.FC = () => {
                 placeholder="Optional: add any additional details not captured by the attributes above..."
               />
             </div>
+
+            {/* UNSPSC Code */}
+            {formData.classification === Classification.ITEM && (
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  UNSPSC Commodity Code
+                  <HelpTooltip text="Search by UNSPSC code number or description to find the right commodity classification" />
+                </label>
+                <UnspscSearch
+                  value={formData.unspscCode || ''}
+                  onChange={(code) => setFormData({ ...formData, unspscCode: code })}
+                  disabled={false}
+                />
+              </div>
+            )}
+
+            {/* Short Description (240 chars) */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                Short Description (max 240 characters)
+                <HelpTooltip text="A concise description for Oracle. Auto-populated from the generated description but can be edited." />
+              </label>
+              <input
+                type="text"
+                maxLength={240}
+                className="w-full rounded-lg border-slate-300 dark:border-slate-600 shadow-sm border p-2.5 focus:border-blue-500 focus:ring-blue-500/20 transition bg-white dark:bg-slate-700 dark:text-slate-200"
+                value={formData.shortDescription || generatedDescription?.slice(0, 240) || ''}
+                onChange={(e) => setFormData({ ...formData, shortDescription: e.target.value })}
+                placeholder="Short description for Oracle..."
+              />
+              <div className="text-xs text-slate-400 text-right mt-1">
+                {(formData.shortDescription || generatedDescription?.slice(0, 240) || '').length}/240
+              </div>
+            </div>
+
+            {/* Long Description (500 chars) */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                Long Description (max 500 characters)
+                <HelpTooltip text="A detailed description with full specifications. Can include additional details not in the short description." />
+              </label>
+              <textarea
+                maxLength={500}
+                rows={3}
+                className="w-full rounded-lg border-slate-300 dark:border-slate-600 shadow-sm border p-2.5 focus:border-blue-500 focus:ring-blue-500/20 transition bg-white dark:bg-slate-700 dark:text-slate-200"
+                value={formData.longDescription || ''}
+                onChange={(e) => setFormData({ ...formData, longDescription: e.target.value })}
+                placeholder="Detailed description with full specifications..."
+              />
+              <div className="text-xs text-slate-400 text-right mt-1">
+                {(formData.longDescription || '').length}/500
+              </div>
+            </div>
+
+            {/* Brand/Manufacturer from master list */}
+            {formData.classification === Classification.ITEM && brands.length > 0 && (
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  Brand/Manufacturer (Master List)
+                  <HelpTooltip text="Select from the centralized brand master list managed by admin" />
+                </label>
+                <select
+                  className="w-full rounded-lg border-slate-300 dark:border-slate-600 shadow-sm border p-2.5 focus:border-blue-500 focus:ring-blue-500/20 transition bg-white dark:bg-slate-700 dark:text-slate-200"
+                  value={formData.attributes?.brand || ''}
+                  onChange={(e) => setFormData({ ...formData, attributes: { ...formData.attributes, brand: e.target.value } })}
+                >
+                  <option value="">Select brand...</option>
+                  {brands.filter(b => b.active).map(b => (
+                    <option key={b.id} value={b.name}>{b.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             {/* Core Fields */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">

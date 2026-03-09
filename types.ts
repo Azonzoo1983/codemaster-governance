@@ -17,7 +17,8 @@ export enum RequestStatus {
   REJECTED = 'Rejected',
   UNDER_TECHNICAL_VALIDATION = 'Under Technical Validation',
   PENDING_ORACLE_CREATION = 'Pending Manual Oracle Creation',
-  COMPLETED = 'Completed'
+  COMPLETED = 'Completed',
+  CANCELLED = 'Cancelled'
 }
 
 export enum Classification {
@@ -28,6 +29,7 @@ export enum Classification {
 export enum MaterialSubType {
   DIRECT_NONSTOCK = 'Direct (Nonstock)',
   INVENTORY_STOCK = 'Inventory (Stock)',
+  SPARE_PARTS = 'Spare Parts',
 }
 
 export enum ServiceSubType {
@@ -56,10 +58,23 @@ export interface User {
   name: string;
   email: string;
   role: Role;
+  additionalRoles?: Role[]; // Multi-role support
   department: string;
   contactNumber?: string;
   projectNumber?: string;
   projectName?: string;
+}
+
+// Multi-role helper
+export function hasRole(user: User, role: Role): boolean {
+  return user.role === role || (user.additionalRoles?.includes(role) ?? false);
+}
+
+// Brand/Manufacturer master list
+export interface Brand {
+  id: string;
+  name: string;
+  active: boolean;
 }
 
 export interface Priority {
@@ -125,9 +140,22 @@ export interface RequestItem {
   unspscCode?: string;
   resourceCode?: string;
 
+  // Amendment fields
+  existingDescription?: string; // Current Oracle description for amendments
+
+  // Short & Long descriptions
+  shortDescription?: string; // Max 240 chars - editable until completion
+  longDescription?: string;  // Max 500 chars
+
   // Final Oracle Data
   oracleCode?: string;
   finalDescription?: string;
+  specialistDescription?: string; // Original description from specialist (for diff tracking)
+
+  // Cancellation
+  cancelledAt?: string;
+  cancelledBy?: string;
+  cancellationReason?: string;
 
   attachments?: Attachment[];
 
@@ -234,7 +262,7 @@ export const MOCK_ATTRIBUTES: AttributeDefinition[] = [
   { id: 'weight', name: 'Weight', type: AttributeType.NUMERIC_UNIT, units: ['kg', 'g', 'lb', 'oz', 'ton'], mandatory: false, active: true, includeInAutoDescription: true, descriptionOrder: 7, visibleForClassification: [Classification.ITEM] },
   { id: 'origin', name: 'Country of Origin', type: AttributeType.TEXT, mandatory: false, active: true, includeInAutoDescription: false, descriptionOrder: 99, visibleForClassification: [Classification.ITEM] },
   { id: 'brand', name: 'Brand/Manufacturer', type: AttributeType.TEXT, mandatory: false, active: true, includeInAutoDescription: true, descriptionOrder: 8, visibleForClassification: [Classification.ITEM] },
-  { id: 'certs', name: 'Certification / SDS / TDS', type: AttributeType.MULTI_SELECT, options: ['SDS', 'TDS', 'Inspection Report', 'Test Report', 'Mill Cert'], mandatory: false, active: true, includeInAutoDescription: false, descriptionOrder: 99, visibleForClassification: [Classification.ITEM] },
+  { id: 'certs', name: 'Certification / SDS / TDS', type: AttributeType.MULTI_SELECT, options: ['SDS', 'TDS', 'Inspection Report', 'Test Report', 'Mill Cert', 'ISO Certificate', 'ASME Certificate', 'Other'], mandatory: false, active: true, includeInAutoDescription: false, descriptionOrder: 99, visibleForClassification: [Classification.ITEM] },
   { id: 'standards', name: 'Compliance Standards', type: AttributeType.TEXT, mandatory: false, active: true, includeInAutoDescription: true, descriptionOrder: 9, visibleForClassification: [Classification.ITEM] },
   { id: 'shelf_life', name: 'Shelf Life / Expiry', type: AttributeType.TEXT, mandatory: false, active: true, includeInAutoDescription: false, descriptionOrder: 99, visibleForClassification: [Classification.ITEM] },
   { id: 'warranty', name: 'Warranty Details', type: AttributeType.TEXT, mandatory: false, active: true, includeInAutoDescription: false, descriptionOrder: 99, visibleForClassification: [Classification.ITEM] },
