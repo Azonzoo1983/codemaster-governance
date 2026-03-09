@@ -827,7 +827,7 @@ export const NewRequest: React.FC = () => {
                 </label>
                 <select
                   className="w-full rounded-lg border-slate-300 dark:border-slate-600 shadow-sm border p-2.5 focus:border-blue-500 focus:ring-blue-500/20 transition bg-white dark:bg-slate-700 dark:text-slate-200"
-                  value={formData.attributes?.brand || ''}
+                  value={(formData.attributes?.brand as string) || ''}
                   onChange={(e) => setFormData({ ...formData, attributes: { ...formData.attributes, brand: e.target.value } })}
                 >
                   <option value="">Select brand...</option>
