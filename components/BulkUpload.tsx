@@ -3,6 +3,7 @@ import { Upload, Download, FileSpreadsheet, X, CheckCircle, AlertTriangle, Loade
 import { useRequestStore, useUserStore, useAdminStore } from '../stores';
 import { Classification, MaterialSubType, RequestStatus, RequestItem } from '../types';
 import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 
 interface BulkUploadProps {
   onClose: () => void;
@@ -31,7 +32,11 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ onClose }) => {
   const [uploadCount, setUploadCount] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const downloadTemplate = () => {
+  const downloadTemplate = async () => {
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Bulk Upload Template');
+
+    // Define headers
     const headers = [
       'Title',
       'Classification (Item/Service)',
@@ -43,56 +48,69 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ onClose }) => {
       'UNSPSC Code',
       'UOM',
     ];
-    const sampleRows = [
-      ['Steel Pipe 6 inch', 'Item', 'Direct (Nonstock)', 'New', '', 'Carbon steel pipe 6 inch diameter', 'PROJ-001', '30151500', 'Each'],
-      ['Bearing SKF 6205', 'Item', 'Spare Parts', 'New', '', 'Deep groove ball bearing SKF 6205', 'PROJ-001', '31171500', 'Each'],
-      ['Welding Service', 'Service', '', 'New', '', 'On-site welding for pipeline repair', 'PROJ-002', '', 'Lumpsum'],
-    ];
 
-    const ws = XLSX.utils.aoa_to_sheet([headers, ...sampleRows]);
+    // Add header row with styling
+    const headerRow = ws.addRow(headers);
+    headerRow.eachCell((cell) => {
+      cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4472C4' } };
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      cell.border = {
+        bottom: { style: 'thin', color: { argb: 'FF000000' } },
+      };
+    });
+
+    // Add sample rows
+    ws.addRow(['Steel Pipe 6 inch', 'Item', 'Direct (Nonstock)', 'New', '', 'Carbon steel pipe 6 inch diameter', 'PROJ-001', '30151500', 'Each']);
+    ws.addRow(['Bearing SKF 6205', 'Item', 'Spare Parts', 'New', '', 'Deep groove ball bearing SKF 6205', 'PROJ-001', '31171500', 'Each']);
+    ws.addRow(['Welding Service', 'Service', '', 'New', '', 'On-site welding for pipeline repair', 'PROJ-002', '', 'Lumpsum']);
 
     // Set column widths
-    ws['!cols'] = headers.map((h) => ({ wch: Math.max(h.length + 5, 20) }));
-
-    // Add data validation (dropdowns) for specific columns
-    // Column B (index 1) = Classification
-    // Column C (index 2) = Material Sub-Type
-    // Column D (index 3) = Request Type
-    // Column I (index 8) = UOM
-    const validationRows = 200; // support up to 200 rows
-    if (!ws['!dataValidation']) ws['!dataValidation'] = [];
-
-    // Classification dropdown (column B, rows 2-201)
-    ws['!dataValidation'].push({
-      type: 'list',
-      sqref: `B2:B${validationRows + 1}`,
-      formulas: ['"Item,Service"'],
+    ws.columns.forEach((col, i) => {
+      col.width = Math.max((headers[i]?.length || 10) + 5, 20);
     });
 
-    // Material Sub-Type dropdown (column C)
-    ws['!dataValidation'].push({
-      type: 'list',
-      sqref: `C2:C${validationRows + 1}`,
-      formulas: ['"Direct (Nonstock),Inventory (Stock),Spare Parts"'],
-    });
+    // Add data validation (dropdowns) for rows 2-201
+    const validationRows = 200;
+    for (let row = 2; row <= validationRows + 1; row++) {
+      // Column B (2) = Classification
+      ws.getCell(row, 2).dataValidation = {
+        type: 'list',
+        allowBlank: true,
+        formulae: ['"Item,Service"'],
+      };
 
-    // Request Type dropdown (column D)
-    ws['!dataValidation'].push({
-      type: 'list',
-      sqref: `D2:D${validationRows + 1}`,
-      formulas: ['"New,Amendment"'],
-    });
+      // Column C (3) = Material Sub-Type
+      ws.getCell(row, 3).dataValidation = {
+        type: 'list',
+        allowBlank: true,
+        formulae: ['"Direct (Nonstock),Inventory (Stock),Spare Parts"'],
+      };
 
-    // UOM dropdown (column I) - combined Item + Service UOMs
-    ws['!dataValidation'].push({
-      type: 'list',
-      sqref: `I2:I${validationRows + 1}`,
-      formulas: ['"Each,Set,Box,Pair,Meter,mm,Roll,Sheet,Piece,kg,g,Liter,Gallon,Drum,Bag,Bundle,Case,Pack,Ton,Foot,Inch,Days,Hours,Lumpsum,Monthly,Weekly,Per Visit,Per Unit"'],
-    });
+      // Column D (4) = Request Type
+      ws.getCell(row, 4).dataValidation = {
+        type: 'list',
+        allowBlank: true,
+        formulae: ['"New,Amendment"'],
+      };
 
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Bulk Upload Template');
-    XLSX.writeFile(wb, 'CodeMaster_Bulk_Upload_Template.xlsx');
+      // Column I (9) = UOM
+      ws.getCell(row, 9).dataValidation = {
+        type: 'list',
+        allowBlank: true,
+        formulae: ['"Each,Set,Box,Pair,Meter,mm,Roll,Sheet,Piece,kg,g,Liter,Gallon,Drum,Bag,Bundle,Case,Pack,Ton,Foot,Inch,Days,Hours,Lumpsum,Monthly,Weekly,Per Visit,Per Unit"'],
+      };
+    }
+
+    // Generate and download
+    const buffer = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'CodeMaster_Bulk_Upload_Template.xlsx';
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
