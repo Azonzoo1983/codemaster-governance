@@ -185,7 +185,7 @@ export const useRequestStore = create<RequestState>((set, get) => ({
         if (status === RequestStatus.ASSIGNED && updates?.assignedSpecialistId) {
           const specialist = users.find(u => u.id === updates.assignedSpecialistId);
           if (specialist) {
-            notifyAssignment(id, req.title, specialist.email, specialist.name, specialist.name).catch(() => {});
+            notifyAssignment(id, req.title, specialist.email, specialist.name, currentUser.name).catch(() => {});
           }
         }
       } else {

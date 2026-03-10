@@ -54,6 +54,42 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ onClose }) => {
     // Set column widths
     ws['!cols'] = headers.map((h) => ({ wch: Math.max(h.length + 5, 20) }));
 
+    // Add data validation (dropdowns) for specific columns
+    // Column B (index 1) = Classification
+    // Column C (index 2) = Material Sub-Type
+    // Column D (index 3) = Request Type
+    // Column I (index 8) = UOM
+    const validationRows = 200; // support up to 200 rows
+    if (!ws['!dataValidation']) ws['!dataValidation'] = [];
+
+    // Classification dropdown (column B, rows 2-201)
+    ws['!dataValidation'].push({
+      type: 'list',
+      sqref: `B2:B${validationRows + 1}`,
+      formulas: ['"Item,Service"'],
+    });
+
+    // Material Sub-Type dropdown (column C)
+    ws['!dataValidation'].push({
+      type: 'list',
+      sqref: `C2:C${validationRows + 1}`,
+      formulas: ['"Direct (Nonstock),Inventory (Stock),Spare Parts"'],
+    });
+
+    // Request Type dropdown (column D)
+    ws['!dataValidation'].push({
+      type: 'list',
+      sqref: `D2:D${validationRows + 1}`,
+      formulas: ['"New,Amendment"'],
+    });
+
+    // UOM dropdown (column I) - combined Item + Service UOMs
+    ws['!dataValidation'].push({
+      type: 'list',
+      sqref: `I2:I${validationRows + 1}`,
+      formulas: ['"Each,Set,Box,Pair,Meter,mm,Roll,Sheet,Piece,kg,g,Liter,Gallon,Drum,Bag,Bundle,Case,Pack,Ton,Foot,Inch,Days,Hours,Lumpsum,Monthly,Weekly,Per Visit,Per Unit"'],
+    });
+
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Bulk Upload Template');
     XLSX.writeFile(wb, 'CodeMaster_Bulk_Upload_Template.xlsx');
@@ -82,9 +118,22 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ onClose }) => {
         const unspscCode = (row['UNSPSC Code'] || '').trim();
         const uom = (row['UOM'] || '').trim();
 
+        const VALID_MATERIAL_SUB_TYPES = ['Direct (Nonstock)', 'Inventory (Stock)', 'Spare Parts'];
+        const VALID_REQUEST_TYPES = ['New', 'Amendment'];
+        const VALID_UOMS = ['Each', 'Set', 'Box', 'Pair', 'Meter', 'mm', 'Roll', 'Sheet', 'Piece', 'kg', 'g', 'Liter', 'Gallon', 'Drum', 'Bag', 'Bundle', 'Case', 'Pack', 'Ton', 'Foot', 'Inch', 'Days', 'Hours', 'Lumpsum', 'Monthly', 'Weekly', 'Per Visit', 'Per Unit'];
+
         if (!title) errors.push('Title is required');
         if (!classification || !['Item', 'Service'].includes(classification)) {
           errors.push('Classification must be "Item" or "Service"');
+        }
+        if (materialSubType && !VALID_MATERIAL_SUB_TYPES.includes(materialSubType)) {
+          errors.push(`Invalid Material Sub-Type: "${materialSubType}"`);
+        }
+        if (requestType && !VALID_REQUEST_TYPES.includes(requestType)) {
+          errors.push(`Invalid Request Type: "${requestType}"`);
+        }
+        if (uom && !VALID_UOMS.includes(uom)) {
+          errors.push(`Invalid UOM: "${uom}"`);
         }
         if (!project) errors.push('Project is required');
         if (requestType === 'Amendment' && !existingCode) {

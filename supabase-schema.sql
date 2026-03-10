@@ -33,6 +33,12 @@ CREATE TABLE IF NOT EXISTS cm_invite_tokens (
   data JSONB NOT NULL
 );
 
+-- Brands table
+CREATE TABLE IF NOT EXISTS cm_brands (
+  id TEXT PRIMARY KEY,
+  data JSONB NOT NULL
+);
+
 -- ============================================================
 -- Disable RLS for now (app handles its own role-based access)
 -- You can enable RLS later when adding Supabase Auth
@@ -42,6 +48,7 @@ ALTER TABLE cm_priorities ENABLE ROW LEVEL SECURITY;
 ALTER TABLE cm_attributes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE cm_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE cm_invite_tokens ENABLE ROW LEVEL SECURITY;
+ALTER TABLE cm_brands ENABLE ROW LEVEL SECURITY;
 
 -- Allow public (anon) access to all tables
 CREATE POLICY "Allow public read cm_users" ON cm_users FOR SELECT TO anon USING (true);
@@ -68,6 +75,11 @@ CREATE POLICY "Allow public read cm_invite_tokens" ON cm_invite_tokens FOR SELEC
 CREATE POLICY "Allow public insert cm_invite_tokens" ON cm_invite_tokens FOR INSERT TO anon WITH CHECK (true);
 CREATE POLICY "Allow public update cm_invite_tokens" ON cm_invite_tokens FOR UPDATE TO anon USING (true) WITH CHECK (true);
 CREATE POLICY "Allow public delete cm_invite_tokens" ON cm_invite_tokens FOR DELETE TO anon USING (true);
+
+CREATE POLICY "Allow public read cm_brands" ON cm_brands FOR SELECT TO anon USING (true);
+CREATE POLICY "Allow public insert cm_brands" ON cm_brands FOR INSERT TO anon WITH CHECK (true);
+CREATE POLICY "Allow public update cm_brands" ON cm_brands FOR UPDATE TO anon USING (true) WITH CHECK (true);
+CREATE POLICY "Allow public delete cm_brands" ON cm_brands FOR DELETE TO anon USING (true);
 
 -- ============================================================
 -- Seed data: Default users, priorities, and attributes

@@ -14,6 +14,7 @@ const AUTOSAVE_KEY = 'cm-draft-autosave';
 const AUTOSAVE_INTERVAL = 30_000; // 30 seconds
 
 const SERVICE_UOM_OPTIONS = ['Days', 'Hours', 'Lumpsum', 'Each', 'Monthly', 'Weekly', 'Per Visit', 'Per Unit'];
+const ITEM_UOM_OPTIONS = ['Each', 'Set', 'Box', 'Pair', 'Meter', 'mm', 'Roll', 'Sheet', 'Piece', 'kg', 'g', 'Liter', 'Gallon', 'Drum', 'Bag', 'Bundle', 'Case', 'Pack', 'Ton', 'Foot', 'Inch'];
 
 export const NewRequest: React.FC = () => {
   const navigate = useNavigate();
@@ -324,7 +325,7 @@ export const NewRequest: React.FC = () => {
         managerId: linkedManagerId,
         requestType: formData.requestType || 'New',
         existingCode: formData.existingCode || '',
-        shortDescription: formData.shortDescription || '',
+        shortDescription: formData.shortDescription || generatedDescription?.slice(0, 240) || '',
         longDescription: formData.longDescription || '',
         existingDescription: formData.existingDescription || '',
         materialType: formData.materialType || '',
@@ -766,19 +767,17 @@ export const NewRequest: React.FC = () => {
             </div>
 
             {/* UNSPSC Code */}
-            {formData.classification === Classification.ITEM && (
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                  UNSPSC Commodity Code
-                  <HelpTooltip text="Search by UNSPSC code number or description to find the right commodity classification" />
-                </label>
-                <UnspscSearch
-                  value={formData.unspscCode || ''}
-                  onChange={(code) => setFormData({ ...formData, unspscCode: code })}
-                  disabled={false}
-                />
-              </div>
-            )}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                UNSPSC Commodity Code
+                <HelpTooltip text="Search by UNSPSC code number or description to find the right commodity classification" />
+              </label>
+              <UnspscSearch
+                value={formData.unspscCode || ''}
+                onChange={(code) => setFormData({ ...formData, unspscCode: code })}
+                disabled={false}
+              />
+            </div>
 
             {/* Short Description (240 chars) */}
             <div>
@@ -847,7 +846,7 @@ export const NewRequest: React.FC = () => {
                   className="w-full rounded-lg border-slate-300 dark:border-slate-600 shadow-sm border p-2.5 focus:border-blue-500 focus:ring-blue-500/20 transition bg-white dark:bg-slate-700 dark:text-slate-200 dark:placeholder-slate-400"
                   value={formData.title || ''}
                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                  placeholder="e.g. Ball Bearing SKF 6205-2RS"
+                  placeholder={formData.classification === Classification.SERVICE ? "e.g. Plumbing Service" : "e.g. Ball Bearing SKF 6205-2RS"}
                   aria-required="true"
                   aria-describedby={validationErrors.length > 0 ? 'validation-errors' : undefined}
                 />
@@ -866,16 +865,6 @@ export const NewRequest: React.FC = () => {
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">UNSPSC Commodity Code</label>
-                <input
-                  type="text"
-                  className="w-full rounded-lg border-slate-300 dark:border-slate-600 shadow-sm border p-2.5 focus:border-blue-500 focus:ring-blue-500/20 transition bg-white dark:bg-slate-700 dark:text-slate-200 dark:placeholder-slate-400"
-                  value={formData.unspscCode || ''}
-                  onChange={(e) => setFormData({ ...formData, unspscCode: e.target.value })}
-                  placeholder="e.g. 31171500"
-                />
-              </div>
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Resource Code</label>
@@ -905,13 +894,15 @@ export const NewRequest: React.FC = () => {
                     {SERVICE_UOM_OPTIONS.map(u => <option key={u} value={u}>{u}</option>)}
                   </select>
                 ) : (
-                  <input
-                    type="text"
-                    className="w-full rounded-lg border-slate-300 dark:border-slate-600 shadow-sm border p-2.5 focus:border-blue-500 focus:ring-blue-500/20 transition bg-white dark:bg-slate-700 dark:text-slate-200 dark:placeholder-slate-400"
+                  <select
+                    className="w-full rounded-lg border-slate-300 dark:border-slate-600 shadow-sm border p-2.5 focus:border-blue-500 focus:ring-blue-500/20 transition bg-white dark:bg-slate-700 dark:text-slate-200"
                     value={formData.uom || ''}
                     onChange={(e) => setFormData({ ...formData, uom: e.target.value })}
-                    placeholder="e.g. Each, Set, Box, Meter"
-                  />
+                    aria-label="Unit of Measurement"
+                  >
+                    <option value="">Select UOM...</option>
+                    {ITEM_UOM_OPTIONS.map(u => <option key={u} value={u}>{u}</option>)}
+                  </select>
                 )}
               </div>
             </div>

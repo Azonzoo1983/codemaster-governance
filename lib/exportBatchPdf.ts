@@ -1,12 +1,6 @@
 import jsPDF from 'jspdf';
 import { RequestItem, Priority, User, AttributeDefinition } from '../types';
 
-// Colors
-const BLUE = '#2563eb';
-const DARK_GRAY = '#1e293b';
-const LIGHT_GRAY = '#f1f5f9';
-const MEDIUM_GRAY = '#64748b';
-
 const PAGE_WIDTH = 210; // A4 width in mm
 const PAGE_HEIGHT = 297; // A4 height in mm
 const MARGIN = 15;

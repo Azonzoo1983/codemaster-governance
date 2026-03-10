@@ -1,12 +1,6 @@
 import jsPDF from 'jspdf';
 import { RequestItem, Priority, User, AttributeDefinition } from '../types';
 
-// Colors
-const BLUE = '#2563eb';
-const DARK_GRAY = '#1e293b';
-const LIGHT_GRAY = '#f1f5f9';
-const MEDIUM_GRAY = '#64748b';
-
 const PAGE_WIDTH = 210; // A4 width in mm
 const PAGE_HEIGHT = 297; // A4 height in mm
 const MARGIN = 15;
@@ -101,20 +95,14 @@ export function exportRequestPdf(
   y = drawSectionHeader(doc, 'Section 1: Request Details', y);
 
   const col1X = MARGIN + 2;
-  const col2X = MARGIN + CONTENT_WIDTH / 2 + 2;
-  const halfWidth = CONTENT_WIDTH / 2 - 4;
 
-  y = drawKeyValue(doc, 'ID', request.id, col1X, y, halfWidth);
-  const yRight = drawKeyValue(doc, 'Title', request.title, col2X, y - (y - 36 > 44 ? 6.5 : 6.5), halfWidth);
-  // Reset — draw them sequentially for simplicity
-  y = drawSectionHeader(doc, 'Section 1: Request Details', 36);
   y = drawKeyValue(doc, 'ID', request.id, col1X, y, CONTENT_WIDTH - 4);
   y = drawKeyValue(doc, 'Title', request.title, col1X, y, CONTENT_WIDTH - 4);
-  y = drawKeyValue(doc, 'Classification', request.classification, col1X, y, halfWidth);
-  y = drawKeyValue(doc, 'Priority', priority?.name ?? 'Unknown', col1X, y, halfWidth);
-  y = drawKeyValue(doc, 'Status', request.status, col1X, y, halfWidth);
-  y = drawKeyValue(doc, 'Created', new Date(request.createdAt).toLocaleString(), col1X, y, halfWidth);
-  y = drawKeyValue(doc, 'Updated', new Date(request.updatedAt).toLocaleString(), col1X, y, halfWidth);
+  y = drawKeyValue(doc, 'Classification', request.classification, col1X, y, CONTENT_WIDTH - 4);
+  y = drawKeyValue(doc, 'Priority', priority?.name ?? 'Unknown', col1X, y, CONTENT_WIDTH - 4);
+  y = drawKeyValue(doc, 'Status', request.status, col1X, y, CONTENT_WIDTH - 4);
+  y = drawKeyValue(doc, 'Created', new Date(request.createdAt).toLocaleString(), col1X, y, CONTENT_WIDTH - 4);
+  y = drawKeyValue(doc, 'Updated', new Date(request.updatedAt).toLocaleString(), col1X, y, CONTENT_WIDTH - 4);
   y += 4;
 
   // ===== SECTION 2: Requester Info =====

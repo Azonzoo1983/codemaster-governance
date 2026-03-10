@@ -48,7 +48,7 @@ export const Reports: React.FC = () => {
   };
 
   const handleExportPdf = () => {
-    exportToPdf('reports-content', `codemaster-report-${new Date().toISOString().slice(0, 10)}`);
+    exportToPdf(requests, priorities, users, `codemaster-report-${new Date().toISOString().slice(0, 10)}`);
   };
 
   const handleExportExcel = () => {

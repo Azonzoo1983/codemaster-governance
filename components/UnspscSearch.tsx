@@ -59,7 +59,7 @@ export const UnspscSearch: React.FC<UnspscSearchProps> = ({ value, onChange, dis
       const entry = cachedData.find((e) => e.c === value);
       if (entry) setSelectedTitle(entry.t);
     }
-  }, []);
+  }, [value]);
 
   // Close dropdown on click outside
   useEffect(() => {

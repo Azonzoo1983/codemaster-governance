@@ -175,7 +175,9 @@ export const Dashboard: React.FC = () => {
       if (req.status === RequestStatus.ASSIGNED) {
         updateRequestStatus(req.id, RequestStatus.UNDER_SPECIALIST_REVIEW, "Bulk advanced by Specialist");
       } else if (req.status === RequestStatus.UNDER_SPECIALIST_REVIEW) {
-        updateRequestStatus(req.id, RequestStatus.UNDER_TECHNICAL_VALIDATION, "Bulk advanced by Specialist");
+        // Skip bulk advance for this status - requires Technical Reviewer selection per request
+        addToast(`Request ${req.id} requires manual Technical Reviewer selection.`, 'warning');
+        return;
       }
     });
     addToast("Advanced " + eligible.length + " request(s).", "success");
@@ -277,7 +279,7 @@ export const Dashboard: React.FC = () => {
   }, [sortedRequests, page]);
 
   // Reset page when filters change
-  useMemo(() => { setPage(1); }, [filterStatus, filterPriority, filterClassification, filterProject, searchQuery]);
+  useEffect(() => { setPage(1); }, [filterStatus, filterPriority, filterClassification, filterProject, searchQuery]);
 
   // Keyboard navigation for table
   const tbodyRef = useRef<HTMLTableSectionElement>(null);
@@ -305,7 +307,7 @@ export const Dashboard: React.FC = () => {
   });
 
   // Reset focused index when page, filters, or search change
-  useMemo(() => { setFocusedIndex(-1); }, [page, filterStatus, filterPriority, filterClassification, filterProject, searchQuery]);
+  useEffect(() => { setFocusedIndex(-1); }, [page, filterStatus, filterPriority, filterClassification, filterProject, searchQuery]);
 
   const getStatusColor = (status: RequestStatus) => {
     switch (status) {

@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useAdminStore, useUserStore, useInviteStore, useToastStore, useBrandStore } from '../stores';
-import { AttributeDefinition, AttributeType, Priority, Role, Brand, hasRole } from '../types';
+import { AttributeDefinition, AttributeType, Priority, Role, Brand } from '../types';
 import { Trash2, Plus, Edit, Link, Copy, Users, Mail, Shield, Clock, CheckCircle, XCircle, Send, Check, X, Pencil } from 'lucide-react';
 import { EmailNotificationSettings } from '../components/EmailNotificationSettings';
 
