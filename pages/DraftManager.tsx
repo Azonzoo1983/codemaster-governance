@@ -246,6 +246,7 @@ export const DraftManager: React.FC = () => {
   const [sortField, setSortField] = useState<'title' | 'classification' | 'project' | 'createdAt'>('createdAt');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [filter, setFilter] = useState<'all' | 'complete' | 'incomplete'>('all');
 
   // Filter drafts belonging to current user
   const drafts = useMemo(
@@ -271,7 +272,21 @@ export const DraftManager: React.FC = () => {
     return map;
   }, [drafts, allAttributeDefs]);
 
-  const allSelected = drafts.length > 0 && selectedIds.size === drafts.length;
+  // Counts for filter tabs
+  const totalComplete = useMemo(
+    () => drafts.filter((d) => completenessMap.get(d.id)?.complete).length,
+    [drafts, completenessMap]
+  );
+  const totalIncomplete = drafts.length - totalComplete;
+
+  // Apply filter
+  const filteredDrafts = useMemo(() => {
+    if (filter === 'complete') return drafts.filter((d) => completenessMap.get(d.id)?.complete);
+    if (filter === 'incomplete') return drafts.filter((d) => !completenessMap.get(d.id)?.complete);
+    return drafts;
+  }, [drafts, completenessMap, filter]);
+
+  const allSelected = filteredDrafts.length > 0 && selectedIds.size === filteredDrafts.length;
   const someSelected = selectedIds.size > 0;
 
   // Count complete vs incomplete among selected
@@ -290,7 +305,7 @@ export const DraftManager: React.FC = () => {
     if (allSelected) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(drafts.map((d) => d.id)));
+      setSelectedIds(new Set(filteredDrafts.map((d) => d.id)));
     }
   };
 
@@ -402,6 +417,44 @@ export const DraftManager: React.FC = () => {
         </div>
       </div>
 
+      {/* Filter Tabs */}
+      {drafts.length > 0 && (
+        <div className="flex gap-2 flex-wrap">
+          <button
+            onClick={() => { setFilter('all'); setSelectedIds(new Set()); }}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2 ${
+              filter === 'all'
+                ? 'bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-800 shadow-sm'
+                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'
+            }`}
+          >
+            All <span className="bg-white/20 dark:bg-black/20 px-1.5 py-0.5 rounded text-xs">{drafts.length}</span>
+          </button>
+          <button
+            onClick={() => { setFilter('complete'); setSelectedIds(new Set()); }}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2 ${
+              filter === 'complete'
+                ? 'bg-green-600 text-white shadow-sm'
+                : 'bg-white dark:bg-slate-800 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800 hover:bg-green-50 dark:hover:bg-green-900/20'
+            }`}
+          >
+            <CheckCircle size={14} /> Complete <span className={`px-1.5 py-0.5 rounded text-xs ${filter === 'complete' ? 'bg-white/20' : 'bg-green-100 dark:bg-green-900/30'}`}>{totalComplete}</span>
+          </button>
+          {totalIncomplete > 0 && (
+            <button
+              onClick={() => { setFilter('incomplete'); setSelectedIds(new Set()); }}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2 ${
+                filter === 'incomplete'
+                  ? 'bg-amber-500 text-white shadow-sm'
+                  : 'bg-white dark:bg-slate-800 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800 hover:bg-amber-50 dark:hover:bg-amber-900/20'
+              }`}
+            >
+              <AlertTriangle size={14} /> Incomplete <span className={`px-1.5 py-0.5 rounded text-xs ${filter === 'incomplete' ? 'bg-white/20' : 'bg-amber-100 dark:bg-amber-900/30'}`}>{totalIncomplete}</span>
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Empty State */}
       {drafts.length === 0 && (
         <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-12 text-center">
@@ -496,7 +549,7 @@ export const DraftManager: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                {drafts.map((d) => {
+                {filteredDrafts.map((d) => {
                   const info = completenessMap.get(d.id);
                   const isComplete = info?.complete ?? true;
                   const missingFields = info?.missing ?? [];
