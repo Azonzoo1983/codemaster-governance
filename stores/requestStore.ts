@@ -79,11 +79,14 @@ export const useRequestStore = create<RequestState>((set, get) => ({
         addToast(`Request ${newId} created successfully.`, 'success');
 
         // Fire-and-forget email notification to POC/manager for new requests
-        const users = useUserStore.getState().users;
-        const pocUsers = users.filter(u => u.role === Role.POC);
-        pocUsers.forEach(poc => {
-          notifyNewRequest(newId, reqData.title || 'New Request', poc.email, poc.name, currentUser.name, '').catch(() => {});
-        });
+        // Skip notifications for drafts — they'll be sent when submitted
+        if (reqData.status !== RequestStatus.DRAFT) {
+          const users = useUserStore.getState().users;
+          const pocUsers = users.filter(u => u.role === Role.POC);
+          pocUsers.forEach(poc => {
+            notifyNewRequest(newId, reqData.title || 'New Request', poc.email, poc.name, currentUser.name, '').catch(() => {});
+          });
+        }
       } else {
         // Rollback optimistic update
         set((state) => ({ requests: state.requests.filter((r) => r.id !== newId) }));

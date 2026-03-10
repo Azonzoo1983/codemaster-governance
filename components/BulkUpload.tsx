@@ -196,7 +196,7 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ onClose }) => {
         title: row.title,
         description: row.description,
         project: row.project,
-        status: RequestStatus.SUBMITTED_TO_POC,
+        status: RequestStatus.DRAFT,
         attributes: {},
         generatedDescription: row.description,
         requestType: row.requestType === 'Amendment' ? 'Amendment' : 'New',
@@ -240,10 +240,10 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ onClose }) => {
             <div className="text-center py-12">
               <CheckCircle size={64} className="mx-auto text-green-500 mb-4" />
               <h3 className="text-2xl font-bold text-slate-800 dark:text-slate-200 mb-2">
-                {uploadCount} Requests Created
+                {uploadCount} Drafts Created
               </h3>
               <p className="text-slate-500 dark:text-slate-400">
-                All valid requests have been submitted to the coding team.
+                All valid requests have been saved as drafts. Go to <strong>My Drafts</strong> to review, flag urgent items, and submit them.
               </p>
               <button onClick={onClose} className="mt-6 btn-primary text-white px-6 py-2.5 rounded-lg">
                 Close
@@ -350,11 +350,11 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ onClose }) => {
                     >
                       {uploading ? (
                         <>
-                          <Loader2 size={16} className="animate-spin" /> Submitting...
+                          <Loader2 size={16} className="animate-spin" /> Saving Drafts...
                         </>
                       ) : (
                         <>
-                          <Upload size={16} /> Submit {validCount} Requests
+                          <Upload size={16} /> Save {validCount} as Drafts
                         </>
                       )}
                     </button>
