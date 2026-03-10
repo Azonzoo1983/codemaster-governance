@@ -212,6 +212,9 @@ export const NewRequest: React.FC = () => {
   const validateStep = (stepNum: number): string[] => {
     const errors: string[] = [];
     switch (stepNum) {
+      case 1:
+        // Request Type always has a default selection, no validation needed
+        break;
       case 2:
         if (formData.requestType === 'Amendment') {
           if (!formData.existingCode?.trim()) {
@@ -224,7 +227,10 @@ export const NewRequest: React.FC = () => {
             errors.push('New Proposed Description is required for amendments.');
           }
         } else {
-          // Classification/Sub-type validation only for New requests
+          // DB Check + Classification validation for New requests
+          if (!dbChecked) {
+            errors.push('You must confirm database verification before proceeding.');
+          }
           if (formData.classification === Classification.SERVICE && !formData.serviceSubType) {
             errors.push('Service Sub-Type is required.');
           }
@@ -291,8 +297,8 @@ export const NewRequest: React.FC = () => {
 
   const handleSubmit = () => {
     const allErrors = isAmendment
-      ? [...validateStep(2), ...validateStep(4)]
-      : [...validateStep(2), ...validateStep(3), ...validateStep(4)];
+      ? [...validateStep(1), ...validateStep(2), ...validateStep(4)]
+      : [...validateStep(1), ...validateStep(2), ...validateStep(3), ...validateStep(4)];
     if (allErrors.length > 0) {
       setValidationErrors(allErrors);
       addToast(allErrors[0], 'warning');
@@ -453,8 +459,8 @@ export const NewRequest: React.FC = () => {
   };
 
   const stepLabels = isAmendment
-    ? ['Database Check', 'Amendment Details', 'Details & Attributes', 'Priority & Review']
-    : ['Database Check', 'Classification', 'Details & Attributes', 'Priority & Review'];
+    ? ['Request Type', 'Amendment Details', 'Details & Attributes', 'Priority & Review']
+    : ['Request Type', 'DB Check & Classification', 'Details & Attributes', 'Priority & Review'];
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -521,7 +527,7 @@ export const NewRequest: React.FC = () => {
           // Hide Step 3 for amendments
           if (isAmendment && stepNum === 3) return null;
           const isActive = step === stepNum;
-          const isCompleted = step > stepNum || (stepNum === 1 && dbChecked);
+          const isCompleted = step > stepNum;
           const canClick = isCompleted && !isActive;
           return (
             <button
@@ -561,211 +567,213 @@ export const NewRequest: React.FC = () => {
 
       <div className="bg-white dark:bg-slate-800 p-8 rounded-xl shadow-premium-md border border-slate-200/60 dark:border-slate-700/60">
 
-        {/* ====== STEP 1: Database Verification ====== */}
+        {/* ====== STEP 1: Request Type ====== */}
         {step === 1 && (
-          <div className="space-y-6 text-center py-8">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-100 to-amber-50 dark:from-amber-900/40 dark:to-amber-800/20 flex items-center justify-center mx-auto">
-              <AlertTriangle size={32} className="text-amber-500 dark:text-amber-400" />
-            </div>
-            <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100">Database Verification</h3>
-            <p className="text-slate-500 dark:text-slate-400 max-w-lg mx-auto">
-              Before submitting a request, you must verify that this item or service code does not already exist in the Oracle ERP database.
-            </p>
+          <div className="space-y-6">
+            <h3 className="text-lg font-semibold text-slate-700 dark:text-slate-300">What type of request is this?</h3>
 
-            {!dbChecked ? (
-              <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200/60 dark:border-amber-700/60 rounded-xl p-6 max-w-md mx-auto">
-                <p className="text-amber-800 dark:text-amber-300 font-medium mb-4">Have you checked the existing Oracle ERP database for this item code?</p>
-                <div className="flex justify-center gap-4">
-                  <button
-                    onClick={() => addToast('You must check the Oracle ERP database before proceeding. Please verify the code does not already exist.', 'warning')}
-                    className="px-6 py-3 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 font-medium text-slate-700 dark:text-slate-300 transition"
-                  >
-                    No, I haven't
-                  </button>
-                  <button
-                    onClick={() => setDbChecked(true)}
-                    className="btn-primary px-6 py-3 text-white rounded-lg font-medium transition"
-                  >
-                    Yes, I have checked
-                  </button>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <button
+                onClick={() => setFormData({ ...formData, requestType: 'New', existingCode: '' })}
+                className={`p-5 border-2 rounded-xl text-left transition-all ${
+                  formData.requestType === 'New' ? 'border-blue-600 dark:border-blue-500 bg-blue-50 dark:bg-blue-900/30 shadow-premium ring-1 ring-blue-600/10 dark:ring-blue-500/20' : 'border-slate-200 dark:border-slate-600 hover:border-slate-400 dark:hover:border-slate-500'
+                }`}
+              >
+                <div className="flex items-center gap-3 mb-2">
+                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${formData.requestType === 'New' ? 'border-blue-600 dark:border-blue-400' : 'border-slate-300 dark:border-slate-500'}`}>
+                    {formData.requestType === 'New' && <div className="w-2.5 h-2.5 rounded-full bg-blue-600 dark:bg-blue-400" />}
+                  </div>
+                  <span className="font-bold text-lg text-slate-900 dark:text-slate-100">New Item</span>
                 </div>
-              </div>
-            ) : (
-              <div className="bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200/60 dark:border-emerald-700/60 rounded-xl p-6 max-w-md mx-auto">
-                <CheckCircle size={32} className="mx-auto text-emerald-600 dark:text-emerald-400 mb-2" />
-                <p className="text-emerald-800 dark:text-emerald-300 font-medium">Database verification confirmed.</p>
-                <button
-                  onClick={() => setStep(2)}
-                  className="mt-4 btn-primary px-8 py-3 text-white rounded-lg font-medium flex items-center gap-2 mx-auto transition"
-                >
-                  Proceed <ArrowRight size={16} />
-                </button>
-              </div>
-            )}
+                <p className="text-sm text-slate-500 dark:text-slate-400 ml-8">Code does not exist in the system — create a new item or service code.</p>
+              </button>
+
+              <button
+                onClick={() => setFormData({ ...formData, requestType: 'Amendment' })}
+                className={`p-5 border-2 rounded-xl text-left transition-all ${
+                  formData.requestType === 'Amendment' ? 'border-blue-600 dark:border-blue-500 bg-blue-50 dark:bg-blue-900/30 shadow-premium ring-1 ring-blue-600/10 dark:ring-blue-500/20' : 'border-slate-200 dark:border-slate-600 hover:border-slate-400 dark:hover:border-slate-500'
+                }`}
+              >
+                <div className="flex items-center gap-3 mb-2">
+                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${formData.requestType === 'Amendment' ? 'border-blue-600 dark:border-blue-400' : 'border-slate-300 dark:border-slate-500'}`}>
+                    {formData.requestType === 'Amendment' && <div className="w-2.5 h-2.5 rounded-full bg-blue-600 dark:bg-blue-400" />}
+                  </div>
+                  <span className="font-bold text-lg text-slate-900 dark:text-slate-100">Amendment</span>
+                </div>
+                <p className="text-sm text-slate-500 dark:text-slate-400 ml-8">Code exists but description requires modification.</p>
+              </button>
+            </div>
+
+            {/* Navigation */}
+            <div className="flex justify-end pt-6 border-t border-slate-100 dark:border-slate-700">
+              <button onClick={handleNext} className="btn-primary text-white px-6 py-2.5 rounded-lg flex items-center gap-2 transition" aria-label="Go to Step 2">
+                Next <ArrowRight size={16} />
+              </button>
+            </div>
           </div>
         )}
 
-        {/* ====== STEP 2: Request Classification & Type ====== */}
+        {/* ====== STEP 2: DB Check & Classification (New) / Amendment Details ====== */}
         {step === 2 && (
           <div className="space-y-6">
-            <h3 className="text-lg font-semibold text-slate-700 dark:text-slate-300">Request Type & Classification</h3>
 
-            {/* Request Type */}
-            <div>
-              <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-3">Request Type</label>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <button
-                  onClick={() => setFormData({ ...formData, requestType: 'New', existingCode: '' })}
-                  className={`p-5 border-2 rounded-xl text-left transition-all ${
-                    formData.requestType === 'New' ? 'border-blue-600 dark:border-blue-500 bg-blue-50 dark:bg-blue-900/30 shadow-premium ring-1 ring-blue-600/10 dark:ring-blue-500/20' : 'border-slate-200 dark:border-slate-600 hover:border-slate-400 dark:hover:border-slate-500'
-                  }`}
-                >
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${formData.requestType === 'New' ? 'border-blue-600 dark:border-blue-400' : 'border-slate-300 dark:border-slate-500'}`}>
-                      {formData.requestType === 'New' && <div className="w-2.5 h-2.5 rounded-full bg-blue-600 dark:bg-blue-400" />}
-                    </div>
-                    <span className="font-bold text-lg text-slate-900 dark:text-slate-100">New Item</span>
-                  </div>
-                  <p className="text-sm text-slate-500 dark:text-slate-400 ml-8">Code does not exist in the system.</p>
-                </button>
-
-                <button
-                  onClick={() => setFormData({ ...formData, requestType: 'Amendment' })}
-                  className={`p-5 border-2 rounded-xl text-left transition-all ${
-                    formData.requestType === 'Amendment' ? 'border-blue-600 dark:border-blue-500 bg-blue-50 dark:bg-blue-900/30 shadow-premium ring-1 ring-blue-600/10 dark:ring-blue-500/20' : 'border-slate-200 dark:border-slate-600 hover:border-slate-400 dark:hover:border-slate-500'
-                  }`}
-                >
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${formData.requestType === 'Amendment' ? 'border-blue-600 dark:border-blue-400' : 'border-slate-300 dark:border-slate-500'}`}>
-                      {formData.requestType === 'Amendment' && <div className="w-2.5 h-2.5 rounded-full bg-blue-600 dark:bg-blue-400" />}
-                    </div>
-                    <span className="font-bold text-lg text-slate-900 dark:text-slate-100">Amendment</span>
-                  </div>
-                  <p className="text-sm text-slate-500 dark:text-slate-400 ml-8">Code exists but description requires modification.</p>
-                </button>
-              </div>
-            </div>
-
-            {formData.requestType === 'Amendment' && (
-              <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200/60 dark:border-amber-700/60 rounded-xl p-4">
-                <label className="block text-sm font-medium text-amber-800 dark:text-amber-300 mb-1">Existing Oracle Code <span className="text-red-500">*</span></label>
-                <input
-                  type="text"
-                  className="w-full rounded-lg border-amber-200 dark:border-amber-700 shadow-sm border p-2.5 focus:border-amber-500 focus:ring-amber-500/20 transition bg-white dark:bg-slate-700 dark:text-slate-200 dark:placeholder-slate-400"
-                  value={formData.existingCode || ''}
-                  onChange={(e) => setFormData({ ...formData, existingCode: e.target.value })}
-                  placeholder="Enter the existing Oracle code..."
-                  aria-required="true"
-                  aria-label="Existing Oracle Code"
-                />
-                {/* Existing Oracle Description */}
-                <div className="mt-4">
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                    Current Oracle Description <span className="text-red-500">*</span>
-                  </label>
-                  <textarea
-                    className="w-full rounded-lg border-slate-300 dark:border-slate-600 shadow-sm border p-2.5 focus:border-blue-500 focus:ring-blue-500/20 transition bg-white dark:bg-slate-700 dark:text-slate-200"
-                    rows={2}
-                    value={formData.existingDescription || ''}
-                    onChange={(e) => setFormData({ ...formData, existingDescription: e.target.value })}
-                    placeholder="Enter the current Oracle description..."
-                  />
-                </div>
-                {/* New Proposed Description */}
-                <div className="mt-4">
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                    New Proposed Description <span className="text-red-500">*</span>
-                  </label>
-                  <textarea
-                    className="w-full rounded-lg border-slate-300 dark:border-slate-600 shadow-sm border p-2.5 focus:border-blue-500 focus:ring-blue-500/20 transition bg-white dark:bg-slate-700 dark:text-slate-200"
-                    rows={3}
-                    value={formData.proposedDescription || ''}
-                    onChange={(e) => setFormData({ ...formData, proposedDescription: e.target.value })}
-                    placeholder="Enter the new proposed description..."
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Classification — only shown for New requests, not Amendments */}
-            {formData.requestType !== 'Amendment' && (
+            {isAmendment ? (
+              /* ---- Amendment: 3 fields only ---- */
               <>
-                <div className="pt-4 border-t border-slate-100 dark:border-slate-700">
-                  <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-3">Classification<HelpTooltip text="Choose 'Item' for physical materials/parts or 'Service' for service-based coding requests" /></label>
-                  <div className="flex gap-4">
-                    {[Classification.ITEM, Classification.SERVICE].map(c => (
-                      <button
-                        key={c}
-                        onClick={() => setFormData({
-                          ...formData,
-                          classification: c,
-                          materialSubType: c === Classification.ITEM ? MaterialSubType.DIRECT_NONSTOCK : undefined,
-                          serviceSubType: c === Classification.SERVICE ? undefined : undefined,
-                          attributes: {},
-                        })}
-                        className={`flex-1 py-3.5 border-2 rounded-lg text-center font-semibold transition-all ${
-                          formData.classification === c
-                            ? 'bg-slate-800 dark:bg-slate-200 text-white dark:text-slate-800 border-slate-800 dark:border-slate-200 shadow-premium'
-                            : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-300 dark:border-slate-600 hover:border-slate-400 dark:hover:border-slate-500'
-                        }`}
-                      >
-                        {c === Classification.ITEM ? 'Material (Item)' : 'Service'}
-                      </button>
-                    ))}
+                <h3 className="text-lg font-semibold text-slate-700 dark:text-slate-300">Amendment Details</h3>
+                <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200/60 dark:border-amber-700/60 rounded-xl p-4">
+                  <label className="block text-sm font-medium text-amber-800 dark:text-amber-300 mb-1">Existing Oracle Code <span className="text-red-500">*</span></label>
+                  <input
+                    type="text"
+                    className="w-full rounded-lg border-amber-200 dark:border-amber-700 shadow-sm border p-2.5 focus:border-amber-500 focus:ring-amber-500/20 transition bg-white dark:bg-slate-700 dark:text-slate-200 dark:placeholder-slate-400"
+                    value={formData.existingCode || ''}
+                    onChange={(e) => setFormData({ ...formData, existingCode: e.target.value })}
+                    placeholder="Enter the existing Oracle code..."
+                    aria-required="true"
+                    aria-label="Existing Oracle Code"
+                  />
+                  <div className="mt-4">
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                      Current Oracle Description <span className="text-red-500">*</span>
+                    </label>
+                    <textarea
+                      className="w-full rounded-lg border-slate-300 dark:border-slate-600 shadow-sm border p-2.5 focus:border-blue-500 focus:ring-blue-500/20 transition bg-white dark:bg-slate-700 dark:text-slate-200"
+                      rows={2}
+                      value={formData.existingDescription || ''}
+                      onChange={(e) => setFormData({ ...formData, existingDescription: e.target.value })}
+                      placeholder="Enter the current Oracle description..."
+                    />
+                  </div>
+                  <div className="mt-4">
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                      New Proposed Description <span className="text-red-500">*</span>
+                    </label>
+                    <textarea
+                      className="w-full rounded-lg border-slate-300 dark:border-slate-600 shadow-sm border p-2.5 focus:border-blue-500 focus:ring-blue-500/20 transition bg-white dark:bg-slate-700 dark:text-slate-200"
+                      rows={3}
+                      value={formData.proposedDescription || ''}
+                      onChange={(e) => setFormData({ ...formData, proposedDescription: e.target.value })}
+                      placeholder="Enter the new proposed description..."
+                    />
                   </div>
                 </div>
+              </>
+            ) : (
+              /* ---- New Item: DB Check gate + Classification ---- */
+              <>
+                <h3 className="text-lg font-semibold text-slate-700 dark:text-slate-300">Database Check & Classification</h3>
 
-                {/* Sub-Type Selection */}
-                {formData.classification === Classification.ITEM && (
-                  <div>
-                    <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-3">Material Sub-Type</label>
-                    <div className="grid grid-cols-3 gap-3">
-                      {Object.values(MaterialSubType).map(st => (
-                        <button
-                          key={st}
-                          onClick={() => setFormData({ ...formData, materialSubType: st })}
-                          className={`p-3 border-2 rounded-lg text-center text-sm font-medium transition-all ${
-                            formData.materialSubType === st
-                              ? 'border-blue-600 dark:border-blue-500 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 ring-1 ring-blue-600/10 dark:ring-blue-500/20'
-                              : 'border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:border-slate-400 dark:hover:border-slate-500'
-                          }`}
-                        >
-                          {st}
-                        </button>
-                      ))}
+                {/* DB Check gate */}
+                {!dbChecked ? (
+                  <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200/60 dark:border-amber-700/60 rounded-xl p-6">
+                    <div className="flex items-center gap-3 mb-3">
+                      <AlertTriangle size={20} className="text-amber-500 dark:text-amber-400 shrink-0" />
+                      <p className="text-amber-800 dark:text-amber-300 font-medium">Have you checked the Oracle ERP database to confirm this code does not already exist?</p>
                     </div>
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => addToast('You must check the Oracle ERP database before proceeding. Please verify the code does not already exist.', 'warning')}
+                        className="px-5 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 font-medium text-slate-700 dark:text-slate-300 transition text-sm"
+                      >
+                        No, I haven't
+                      </button>
+                      <button
+                        onClick={() => setDbChecked(true)}
+                        className="btn-primary px-5 py-2.5 text-white rounded-lg font-medium transition text-sm"
+                      >
+                        Yes, I have checked
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200/60 dark:border-emerald-700/60 rounded-xl p-3 flex items-center gap-2">
+                    <CheckCircle size={18} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+                    <p className="text-sm text-emerald-800 dark:text-emerald-300 font-medium">Database verification confirmed</p>
+                    <button onClick={() => setDbChecked(false)} className="ml-auto text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition">Reset</button>
                   </div>
                 )}
 
-                {formData.classification === Classification.SERVICE && (
-                  <div>
-                    <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-3">Service Sub-Type <span className="text-red-500">*</span></label>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                      {Object.values(ServiceSubType).map(st => (
-                        <button
-                          key={st}
-                          onClick={() => setFormData({ ...formData, serviceSubType: st })}
-                          className={`p-3 border-2 rounded-lg text-center text-sm font-medium transition-all ${
-                            formData.serviceSubType === st
-                              ? 'border-blue-600 dark:border-blue-500 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 ring-1 ring-blue-600/10 dark:ring-blue-500/20'
-                              : 'border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:border-slate-400 dark:hover:border-slate-500'
-                        }`}
-                        >
-                          {st}
-                        </button>
-                      ))}
+                {/* Classification — shown after DB check confirmed */}
+                {dbChecked && (
+                  <>
+                    <div className="pt-4 border-t border-slate-100 dark:border-slate-700">
+                      <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-3">Classification<HelpTooltip text="Choose 'Item' for physical materials/parts or 'Service' for service-based coding requests" /></label>
+                      <div className="flex gap-4">
+                        {[Classification.ITEM, Classification.SERVICE].map(c => (
+                          <button
+                            key={c}
+                            onClick={() => setFormData({
+                              ...formData,
+                              classification: c,
+                              materialSubType: c === Classification.ITEM ? MaterialSubType.DIRECT_NONSTOCK : undefined,
+                              serviceSubType: c === Classification.SERVICE ? undefined : undefined,
+                              attributes: {},
+                            })}
+                            className={`flex-1 py-3.5 border-2 rounded-lg text-center font-semibold transition-all ${
+                              formData.classification === c
+                                ? 'bg-slate-800 dark:bg-slate-200 text-white dark:text-slate-800 border-slate-800 dark:border-slate-200 shadow-premium'
+                                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-300 dark:border-slate-600 hover:border-slate-400 dark:hover:border-slate-500'
+                            }`}
+                          >
+                            {c === Classification.ITEM ? 'Material (Item)' : 'Service'}
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                  </div>
+
+                    {/* Sub-Type Selection */}
+                    {formData.classification === Classification.ITEM && (
+                      <div>
+                        <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-3">Material Sub-Type</label>
+                        <div className="grid grid-cols-3 gap-3">
+                          {Object.values(MaterialSubType).map(st => (
+                            <button
+                              key={st}
+                              onClick={() => setFormData({ ...formData, materialSubType: st })}
+                              className={`p-3 border-2 rounded-lg text-center text-sm font-medium transition-all ${
+                                formData.materialSubType === st
+                                  ? 'border-blue-600 dark:border-blue-500 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 ring-1 ring-blue-600/10 dark:ring-blue-500/20'
+                                  : 'border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:border-slate-400 dark:hover:border-slate-500'
+                              }`}
+                            >
+                              {st}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {formData.classification === Classification.SERVICE && (
+                      <div>
+                        <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-3">Service Sub-Type <span className="text-red-500">*</span></label>
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                          {Object.values(ServiceSubType).map(st => (
+                            <button
+                              key={st}
+                              onClick={() => setFormData({ ...formData, serviceSubType: st })}
+                              className={`p-3 border-2 rounded-lg text-center text-sm font-medium transition-all ${
+                                formData.serviceSubType === st
+                                  ? 'border-blue-600 dark:border-blue-500 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 ring-1 ring-blue-600/10 dark:ring-blue-500/20'
+                                  : 'border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:border-slate-400 dark:hover:border-slate-500'
+                            }`}
+                            >
+                              {st}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
               </>
             )}
 
             {/* Navigation */}
             <div className="flex justify-between pt-6 border-t border-slate-100 dark:border-slate-700">
-              <button onClick={handleBack} className="text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 flex items-center gap-1 transition" aria-label="Go back to Step 1: Database Check">
+              <button onClick={handleBack} className="text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 flex items-center gap-1 transition" aria-label="Go back to Step 1: Request Type">
                 <ArrowLeft size={16} /> Back
               </button>
-              <button onClick={handleNext} className="btn-primary text-white px-6 py-2.5 rounded-lg flex items-center gap-2 transition" aria-label="Go to Step 3: Details & Attributes">
+              <button onClick={handleNext} className="btn-primary text-white px-6 py-2.5 rounded-lg flex items-center gap-2 transition" aria-label={isAmendment ? "Go to Priority & Review" : "Go to Step 3: Details & Attributes"}>
                 Next <ArrowRight size={16} />
               </button>
             </div>
@@ -1002,7 +1010,7 @@ export const NewRequest: React.FC = () => {
 
             {/* Navigation */}
             <div className="flex justify-between pt-6 border-t border-slate-100 dark:border-slate-700">
-              <button onClick={handleBack} className="text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 flex items-center gap-1 transition" aria-label="Go back to Step 2: Classification">
+              <button onClick={handleBack} className="text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 flex items-center gap-1 transition" aria-label="Go back to Step 2: DB Check & Classification">
                 <ArrowLeft size={16} /> Back
               </button>
               <button onClick={handleNext} className="btn-primary text-white px-6 py-2.5 rounded-lg flex items-center gap-2 transition" aria-label="Go to Step 4: Priority & Review">
