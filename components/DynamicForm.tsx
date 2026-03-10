@@ -1,5 +1,6 @@
 import React from 'react';
 import { AttributeDefinition, AttributeType } from '../types';
+import { ComboBoxInput } from './ComboBoxInput';
 
 interface DynamicFormProps {
   attributes: AttributeDefinition[];
@@ -8,6 +9,8 @@ interface DynamicFormProps {
   readOnly?: boolean;
   /** When true, mandatory fields that are empty get an amber highlight */
   highlightEmpty?: boolean;
+  /** Autocomplete suggestions keyed by attribute ID (e.g. { brand: ['SKF', 'Tenaris', ...] }) */
+  suggestions?: Record<string, string[]>;
 }
 
 const inputClasses = "w-full rounded-lg border-slate-300 dark:border-slate-600 shadow-sm focus:border-blue-500 focus:ring-blue-500/20 border p-2 disabled:bg-slate-100 dark:disabled:bg-slate-800 transition bg-white dark:bg-slate-700 dark:text-slate-200 dark:placeholder-slate-400";
@@ -33,7 +36,7 @@ function isEmpty(val: any, type: AttributeType): boolean {
   return true;
 }
 
-export const DynamicForm: React.FC<DynamicFormProps> = ({ attributes, values, onChange, readOnly = false, highlightEmpty = false }) => {
+export const DynamicForm: React.FC<DynamicFormProps> = ({ attributes, values, onChange, readOnly = false, highlightEmpty = false, suggestions = {} }) => {
 
   const sortedAttributes = [...attributes].sort((a, b) => a.descriptionOrder - b.descriptionOrder);
 
@@ -77,19 +80,32 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({ attributes, values, on
               {attr.mandatory && <span className="sr-only"> (required)</span>}
             </label>
 
-          {/* Text Input */}
+          {/* Text Input — with autocomplete if suggestions exist */}
           {attr.type === AttributeType.TEXT && (
             <>
-              <input
-                id={`field-${attr.id}`}
-                type="text"
-                disabled={readOnly}
-                aria-required={attr.mandatory || undefined}
-                value={values[attr.id] || ''}
-                onChange={(e) => handleChange(attr.id, e.target.value)}
-                className={getInputClasses(attr)}
-                placeholder={`Enter ${attr.name}`}
-              />
+              {suggestions[attr.id] && suggestions[attr.id].length > 0 ? (
+                <ComboBoxInput
+                  id={`field-${attr.id}`}
+                  value={values[attr.id] || ''}
+                  onChange={(val) => handleChange(attr.id, val)}
+                  suggestions={suggestions[attr.id]}
+                  disabled={readOnly}
+                  aria-required={attr.mandatory || undefined}
+                  className={getInputClasses(attr)}
+                  placeholder={`Type or select ${attr.name}`}
+                />
+              ) : (
+                <input
+                  id={`field-${attr.id}`}
+                  type="text"
+                  disabled={readOnly}
+                  aria-required={attr.mandatory || undefined}
+                  value={values[attr.id] || ''}
+                  onChange={(e) => handleChange(attr.id, e.target.value)}
+                  className={getInputClasses(attr)}
+                  placeholder={`Enter ${attr.name}`}
+                />
+              )}
               {shouldHint && <RequiredHint />}
             </>
           )}

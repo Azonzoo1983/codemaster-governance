@@ -28,6 +28,7 @@ export const NewRequest: React.FC = () => {
   const users = useUserStore((s) => s.users);
   const addToast = useToastStore((s) => s.addToast);
   const brands = useBrandStore((s) => s.brands);
+  const addBrand = useBrandStore((s) => s.addBrand);
 
   const [step, setStep] = useState(1);
   const [dbChecked, setDbChecked] = useState(false);
@@ -161,6 +162,19 @@ export const NewRequest: React.FC = () => {
     ),
     [attributes, formData.classification]
   );
+
+  // Brand autocomplete suggestions: admin-managed brands + unique brands from existing requests
+  const attributeSuggestions = useMemo(() => {
+    const brandNames = new Set(brands.filter((b) => b.active).map((b) => b.name));
+    // Also collect brand values used in existing requests
+    for (const req of requests) {
+      const brandVal = req.attributes?.brand;
+      if (typeof brandVal === 'string' && brandVal.trim()) {
+        brandNames.add(brandVal.trim());
+      }
+    }
+    return { brand: [...brandNames].sort((a, b) => a.localeCompare(b)) };
+  }, [brands, requests]);
 
   // Auto-Description Logic
   const generateDescription = useCallback((attrs: Record<string, string | number | string[] | Record<string, string | number>>) => {
@@ -364,6 +378,15 @@ export const NewRequest: React.FC = () => {
       };
 
       addRequest(newRequestPayload);
+    }
+
+    // Auto-add new brand to brand master data (so it shows up for future requests)
+    const brandVal = formData.attributes?.brand;
+    if (typeof brandVal === 'string' && brandVal.trim()) {
+      const exists = brands.some((b) => b.name.toLowerCase() === brandVal.trim().toLowerCase());
+      if (!exists) {
+        addBrand(brandVal.trim());
+      }
     }
 
     // Clear auto-saved draft on successful submission
@@ -935,6 +958,7 @@ export const NewRequest: React.FC = () => {
                 values={formData.attributes || {}}
                 onChange={(key, val) => setFormData(prev => ({ ...prev, attributes: { ...prev.attributes, [key]: val } }))}
                 highlightEmpty={!!requestId}
+                suggestions={attributeSuggestions}
               />
             </div>
 
