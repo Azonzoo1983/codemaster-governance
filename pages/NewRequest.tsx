@@ -51,7 +51,8 @@ export const NewRequest: React.FC = () => {
       if (req) {
         setFormData({ ...req });
         setDbChecked(true);
-        setStep(3);
+        // Amendments skip Step 3 — open on Step 2 (Amendment Details) instead
+        setStep(req.requestType === 'Amendment' ? 2 : 3);
       }
     }
   }, [requestId, requests]);
@@ -154,8 +155,8 @@ export const NewRequest: React.FC = () => {
   // Filtered attributes based on classification
   const relevantAttributes = useMemo(() =>
     attributes.filter(a =>
-      a.active && (a.visibleForClassification
-        ? a.visibleForClassification.includes(formData.classification!)
+      a.active && (a.visibleForClassification && formData.classification
+        ? a.visibleForClassification.includes(formData.classification)
         : true)
     ),
     [attributes, formData.classification]
@@ -326,7 +327,7 @@ export const NewRequest: React.FC = () => {
       const updatePayload: Partial<RequestItem> = {
         ...formData,
         status: resubStatus,
-        attributes: formData.attributes!,
+        attributes: formData.attributes || {},
         generatedDescription: generatedDescription || ''
       };
       if (linkedManagerId) updatePayload.managerId = linkedManagerId;
@@ -334,8 +335,8 @@ export const NewRequest: React.FC = () => {
     } else {
       const newRequestPayload: Omit<RequestItem, 'id' | 'createdAt' | 'updatedAt' | 'history' | 'stageTimestamps'> = {
         requesterId: currentUser.id,
-        classification: formData.classification!,
-        priorityId: formData.priorityId!,
+        classification: formData.classification || Classification.ITEM,
+        priorityId: formData.priorityId || '',
         title: (formData.shortDescription || generatedDescription?.slice(0, 240) || (isAmendment ? `Amendment: ${formData.existingCode}` : '') || formData.classification || 'New Request').trim(),
         description: formData.description || generatedDescription || (isAmendment ? formData.proposedDescription : '') || '',
         project: formData.project?.trim() || '',
@@ -1134,10 +1135,12 @@ export const NewRequest: React.FC = () => {
                     <span className="font-medium text-slate-800 dark:text-slate-200">{formData.existingCode}</span>
                   </div>
                 )}
-                <div className="flex justify-between py-2 border-b border-slate-200/60 dark:border-slate-700/60">
-                  <span className="text-slate-500 dark:text-slate-400">Project Code</span>
-                  <span className="font-medium text-slate-800 dark:text-slate-200">{formData.project}</span>
-                </div>
+                {formData.project && (
+                  <div className="flex justify-between py-2 border-b border-slate-200/60 dark:border-slate-700/60">
+                    <span className="text-slate-500 dark:text-slate-400">Project Code</span>
+                    <span className="font-medium text-slate-800 dark:text-slate-200">{formData.project}</span>
+                  </div>
+                )}
                 {formData.unspscCode && (
                   <div className="flex justify-between py-2 border-b border-slate-200/60 dark:border-slate-700/60">
                     <span className="text-slate-500 dark:text-slate-400">UNSPSC Code</span>

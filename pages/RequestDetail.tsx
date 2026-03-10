@@ -49,6 +49,7 @@ export const RequestDetail: React.FC = () => {
     if (request) {
       setFinalDesc(request.finalDescription || request.generatedDescription || '');
       setEditableUom(request.uom || '');
+      setShortDesc(request.shortDescription || request.generatedDescription?.slice(0, 240) || '');
     }
   }, [request]);
 
@@ -184,13 +185,14 @@ export const RequestDetail: React.FC = () => {
 
 
   // Feature #15: Helper to get the most recent specialist remark from history when returned
+  // History is stored newest-first, so [0] is the most recent entry
   const getSpecialistReturnRemarks = () => {
     if (!request.history || request.history.length === 0) return null;
     const returnEntries = request.history.filter(h =>
       h.action.toLowerCase().includes('returned') || h.action.toLowerCase().includes('return')
     );
     if (returnEntries.length === 0) return null;
-    return returnEntries[returnEntries.length - 1];
+    return returnEntries[0]; // newest-first: [0] is the most recent return remark
   };
 
   // Feature #22: Comprehensive Summary Panel for Tech Reviewer & Oracle Creation
