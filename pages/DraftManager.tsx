@@ -610,7 +610,7 @@ export const DraftManager: React.FC = () => {
                               <AlertTriangle size={12} /> Incomplete ({missingFields.length})
                             </span>
                             <button
-                              onClick={() => navigate(`/new-request/${d.id}`)}
+                              onClick={() => navigate(`/requests/${d.id}/edit`)}
                               className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition"
                               title="Edit to complete missing fields"
                             >

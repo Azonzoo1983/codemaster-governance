@@ -934,6 +934,7 @@ export const NewRequest: React.FC = () => {
                 attributes={relevantAttributes}
                 values={formData.attributes || {}}
                 onChange={(key, val) => setFormData(prev => ({ ...prev, attributes: { ...prev.attributes, [key]: val } }))}
+                highlightEmpty={!!requestId}
               />
             </div>
 
