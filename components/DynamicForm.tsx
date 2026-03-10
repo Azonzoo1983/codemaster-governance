@@ -67,8 +67,13 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({ attributes, values, on
 
         return (
           <div key={attr.id} className={`${attr.type === AttributeType.DIMENSION_BLOCK ? 'md:col-span-2' : ''}`}>
-            <label htmlFor={`field-${attr.id}`} className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-              {attr.name} {attr.mandatory && <span className="text-red-500" aria-hidden="true">*</span>}
+            <label htmlFor={`field-${attr.id}`} className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-1.5 flex-wrap">
+              <span>{attr.name}</span>
+              {attr.mandatory && (
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border border-amber-200/60 dark:border-amber-700/40">
+                  Required
+                </span>
+              )}
               {attr.mandatory && <span className="sr-only"> (required)</span>}
             </label>
 
