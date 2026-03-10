@@ -475,7 +475,8 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ onClose }) => {
 
   // ──── Computed values ────
 
-  const validCount = parsedRows.filter((r) => r.errors.length === 0).length;
+  const savableCount = parsedRows.filter((r) => r.errors.length === 0).length;
+  const completeCount = parsedRows.filter((r) => r.errors.length === 0 && r.warnings.length === 0).length;
   const errorCount = parsedRows.filter((r) => r.errors.length > 0).length;
   const warningCount = parsedRows.filter((r) => r.errors.length === 0 && r.warnings.length > 0).length;
 
@@ -570,19 +571,19 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ onClose }) => {
                   {/* Summary badges */}
                   <div className="flex gap-3 mb-4 flex-wrap">
                     <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 px-4 py-2 rounded-lg text-sm">
-                      <span className="font-bold text-green-700 dark:text-green-400">{validCount}</span>{' '}
-                      <span className="text-green-600 dark:text-green-500">valid rows</span>
+                      <span className="font-bold text-green-700 dark:text-green-400">{completeCount}</span>{' '}
+                      <span className="text-green-600 dark:text-green-500">complete</span>
                     </div>
-                    {errorCount > 0 && (
-                      <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-4 py-2 rounded-lg text-sm">
-                        <span className="font-bold text-red-700 dark:text-red-400">{errorCount}</span>{' '}
-                        <span className="text-red-600 dark:text-red-500">rows with errors</span>
-                      </div>
-                    )}
                     {warningCount > 0 && (
                       <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-4 py-2 rounded-lg text-sm">
                         <span className="font-bold text-amber-700 dark:text-amber-400">{warningCount}</span>{' '}
                         <span className="text-amber-600 dark:text-amber-500">incomplete (missing attributes)</span>
+                      </div>
+                    )}
+                    {errorCount > 0 && (
+                      <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-4 py-2 rounded-lg text-sm">
+                        <span className="font-bold text-red-700 dark:text-red-400">{errorCount}</span>{' '}
+                        <span className="text-red-600 dark:text-red-500">rejected (missing title/project)</span>
                       </div>
                     )}
                   </div>
@@ -674,7 +675,7 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ onClose }) => {
                   <div className="mt-4 flex justify-end">
                     <button
                       onClick={handleBulkSubmit}
-                      disabled={uploading || validCount === 0}
+                      disabled={uploading || savableCount === 0}
                       className="btn-primary text-white px-6 py-2.5 rounded-lg flex items-center gap-2 disabled:opacity-50"
                     >
                       {uploading ? (
@@ -683,7 +684,7 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ onClose }) => {
                         </>
                       ) : (
                         <>
-                          <Upload size={16} /> Save {validCount} as Drafts
+                          <Upload size={16} /> Save {savableCount} as Drafts{warningCount > 0 ? ` (${warningCount} incomplete)` : ''}
                         </>
                       )}
                     </button>
