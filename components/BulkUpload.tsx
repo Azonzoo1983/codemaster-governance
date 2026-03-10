@@ -1,8 +1,18 @@
 import React, { useState, useRef } from 'react';
-import { Upload, Download, FileSpreadsheet, X, CheckCircle, AlertTriangle, Loader2 } from 'lucide-react';
+import {
+  Upload, Download, FileSpreadsheet, X, CheckCircle, AlertTriangle,
+  Loader2, Info,
+} from 'lucide-react';
 import { useRequestStore, useUserStore, useAdminStore } from '../stores';
-import { Classification, MaterialSubType, ServiceSubType, RequestStatus, RequestItem } from '../types';
+import {
+  Classification, MaterialSubType, ServiceSubType, RequestStatus,
+  RequestItem, AttributeType,
+} from '../types';
 import * as XLSX from 'xlsx';
+import {
+  buildColumnsForSheet, parseRowAttributes, toStr,
+  type ExcelColumn,
+} from '../lib/bulkUploadHelpers';
 
 interface BulkUploadProps {
   onClose: () => void;
@@ -10,92 +20,215 @@ interface BulkUploadProps {
 
 interface ParsedRow {
   title: string;
-  classification: string;
-  materialSubType?: string;
+  classification: Classification;
+  subType?: string;
   description: string;
   project: string;
   unspscCode?: string;
   uom?: string;
+  attributes: Record<string, string | number | string[] | Record<string, string | number>>;
+  sourceSheet: 'Items' | 'Services' | 'Legacy';
   errors: string[];
+  warnings: string[];
 }
+
+// ────────────────── Constants ──────────────────
+
+const ITEM_SUB_TYPES = Object.values(MaterialSubType);
+const SERVICE_SUB_TYPES = Object.values(ServiceSubType);
+
+const ITEM_UOMS = [
+  'Each', 'Set', 'Box', 'Pair', 'Meter', 'mm', 'Roll', 'Sheet', 'Piece',
+  'kg', 'g', 'Liter', 'Gallon', 'Drum', 'Bag', 'Bundle', 'Case', 'Pack',
+  'Ton', 'Foot', 'Inch',
+];
+
+const SERVICE_UOMS = [
+  'Days', 'Hours', 'Lumpsum', 'Each', 'Monthly', 'Weekly', 'Per Visit', 'Per Unit',
+];
+
+// ────────────────── Component ──────────────────
 
 export const BulkUpload: React.FC<BulkUploadProps> = ({ onClose }) => {
   const addRequest = useRequestStore((s) => s.addRequest);
   const currentUser = useUserStore((s) => s.currentUser);
   const priorities = useAdminStore((s) => s.priorities);
+  const allAttributes = useAdminStore((s) => s.attributes);
+
   const [parsedRows, setParsedRows] = useState<ParsedRow[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploaded, setUploaded] = useState(false);
   const [uploadCount, setUploadCount] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // ──── Template Generation (2-sheet with attributes) ────
+
   const downloadTemplate = async () => {
-    // Dynamic import — ExcelJS needs Node.js polyfills, so we load it lazily
-    // to avoid breaking the rest of the component if polyfills aren't perfect
     const ExcelJS = await import('exceljs');
     const wb = new ExcelJS.default.Workbook();
-    const ws = wb.addWorksheet('Bulk Upload Template');
 
-    // Define headers (New items only — amendments use the single request form)
-    const headers = [
-      'Title',
-      'Classification (Item/Service)',
-      'Sub-Type',
-      'Description',
-      'Project',
-      'UNSPSC Code',
-      'UOM',
+    const itemColumns = buildColumnsForSheet(allAttributes, Classification.ITEM);
+    const serviceColumns = buildColumnsForSheet(allAttributes, Classification.SERVICE);
+
+    // Style constants
+    const mandatoryFill = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FFE67E22' } }; // orange
+    const optionalFill = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FF4472C4' } }; // blue
+    const headerFont = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
+    const headerAlign = { horizontal: 'center' as const, vertical: 'middle' as const, wrapText: true };
+    const borderStyle = { bottom: { style: 'thin' as const, color: { argb: 'FF000000' } } };
+
+    const buildSheet = (
+      sheetName: string,
+      columns: ExcelColumn[],
+      sampleRows: Record<string, string | number>[],
+    ) => {
+      const ws = wb.addWorksheet(sheetName);
+
+      // Header row
+      const headers = columns.map((c) => c.header);
+      const headerRow = ws.addRow(headers);
+      headerRow.height = 28;
+
+      headerRow.eachCell((cell, colNumber) => {
+        const col = columns[colNumber - 1];
+        cell.font = headerFont;
+        cell.fill = col.mandatory ? mandatoryFill : optionalFill;
+        cell.alignment = headerAlign;
+        cell.border = borderStyle;
+      });
+
+      // Column widths
+      ws.columns.forEach((wsCol, i) => {
+        wsCol.width = columns[i]?.width || 18;
+      });
+
+      // Freeze header row
+      ws.views = [{ state: 'frozen', ySplit: 1, xSplit: 0 }];
+
+      // Sample data rows
+      for (const sampleRow of sampleRows) {
+        const rowData = columns.map((c) => sampleRow[c.header] ?? '');
+        ws.addRow(rowData);
+      }
+
+      // Data validations for rows 2..201
+      const maxRow = 201;
+      for (let r = 2; r <= maxRow; r++) {
+        for (let c = 0; c < columns.length; c++) {
+          const col = columns[c];
+          if (col.dataValidation && col.dataValidation.length > 0) {
+            const formulaStr = col.dataValidation.join(',');
+            // ExcelJS data validation needs formulae wrapped in quotes inside the string
+            ws.getCell(r, c + 1).dataValidation = {
+              type: 'list',
+              allowBlank: true,
+              formulae: [`"${formulaStr}"`],
+            };
+          }
+        }
+      }
+
+      return ws;
+    };
+
+    // ── Items sheet ──
+    const itemSample1: Record<string, string | number> = {
+      'Title': 'Steel Pipe 6 inch',
+      'Sub-Type': 'Direct (Nonstock)',
+      'Description': 'Carbon steel pipe 6 inch diameter',
+      'Project': 'PROJ-001',
+      'UNSPSC Code': '30151500',
+      'UOM': 'Each',
+      'Material Type & Specs': 'Carbon Steel ASTM A53',
+      'Material Grade/Classification': 'Grade B',
+      'Dim: Length': '6000',
+      'Dim: Diameter': '150',
+      'Dim: Unit': 'mm',
+      'Part Number/Ref Code': 'CS-PIPE-6IN',
+      'Brand/Manufacturer': 'Tenaris',
+      'Surface Finish/Coating': 'Black painted',
+      'Compliance Standards': 'ASTM A53 / API 5L',
+    };
+    const itemSample2: Record<string, string | number> = {
+      'Title': 'Bearing SKF 6205',
+      'Sub-Type': 'Spare Parts',
+      'Description': 'Deep groove ball bearing',
+      'Project': 'PROJ-001',
+      'UOM': 'Each',
+      'Material Type & Specs': 'Chrome Steel',
+      'Part Number/Ref Code': 'SKF-6205-2RS',
+      'Brand/Manufacturer': 'SKF',
+      'Machine/Equipment Name & Model': 'Pump P-101',
+    };
+
+    buildSheet('Items', itemColumns, [itemSample1, itemSample2]);
+
+    // ── Services sheet ──
+    const svcSample1: Record<string, string | number> = {
+      'Title': 'Welding Service',
+      'Sub-Type': 'Maintenance',
+      'Description': 'On-site welding for pipeline repair',
+      'Project': 'PROJ-002',
+      'UOM': 'Lumpsum',
+      'Service Details/Specs': 'SMAW and GTAW welding for 6" CS pipe',
+      'Scope of Work': 'Mobilize crew, weld 10 joints, NDT inspection, demobilize',
+      'Duration': '5 days',
+      'Frequency': 'One-time',
+      'Qualifications / Certifications Required': 'AWS D1.1 certified welder',
+    };
+    const svcSample2: Record<string, string | number> = {
+      'Title': 'IT Support Contract',
+      'Sub-Type': 'Software/IT',
+      'Description': 'Monthly IT helpdesk support',
+      'Project': 'PROJ-003',
+      'UOM': 'Monthly',
+      'Service Details/Specs': 'L1/L2 support for ERP and office applications',
+      'Scope of Work': 'Remote helpdesk, on-site visits as needed, quarterly reports',
+      'Duration': '12 months',
+      'Frequency': 'Monthly',
+    };
+
+    buildSheet('Services', serviceColumns, [svcSample1, svcSample2]);
+
+    // ── Instructions sheet ──
+    const instWs = wb.addWorksheet('Instructions');
+    const instData = [
+      ['CodeMaster Bulk Upload - Instructions'],
+      [''],
+      ['This workbook contains two sheets: "Items" and "Services".'],
+      ['Fill the relevant sheet(s) based on what you need to create.'],
+      [''],
+      ['COLUMN COLORS:'],
+      ['  Orange headers = Mandatory fields (must be filled)'],
+      ['  Blue headers = Optional fields (recommended for completeness)'],
+      [''],
+      ['TIPS:'],
+      ['  - Each row becomes one draft request.'],
+      ['  - Use the dropdown menus for Sub-Type, UOM, and other validated fields.'],
+      ['  - For Multi-Select fields (e.g. Certifications), separate values with commas.'],
+      ['  - Dimension fields: fill at least one dimension value + the unit.'],
+      ['  - Numeric + Unit fields: fill the value column; unit column has a dropdown.'],
+      ['  - You can fill both sheets in one upload.'],
+      ['  - Missing mandatory attribute fields will create "Incomplete" drafts.'],
+      ['    You can complete them later from the My Drafts page before submitting.'],
+      [''],
+      ['AMENDMENTS:'],
+      ['  Amendments to existing Oracle codes should be created via the single request form,'],
+      ['  not through bulk upload.'],
     ];
-
-    // Add header row with styling
-    const headerRow = ws.addRow(headers);
-    headerRow.eachCell((cell) => {
-      cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4472C4' } };
-      cell.alignment = { horizontal: 'center', vertical: 'middle' };
-      cell.border = {
-        bottom: { style: 'thin', color: { argb: 'FF000000' } },
-      };
+    instData.forEach((rowArr) => {
+      instWs.addRow(rowArr);
     });
-
-    // Add sample rows
-    ws.addRow(['Steel Pipe 6 inch', 'Item', 'Direct (Nonstock)', 'Carbon steel pipe 6 inch diameter', 'PROJ-001', '30151500', 'Each']);
-    ws.addRow(['Bearing SKF 6205', 'Item', 'Spare Parts', 'Deep groove ball bearing SKF 6205', 'PROJ-001', '31171500', 'Each']);
-    ws.addRow(['Welding Service', 'Service', 'Maintenance', 'On-site welding for pipeline repair', 'PROJ-002', '', 'Lumpsum']);
-
-    // Set column widths
-    ws.columns.forEach((col, i) => {
-      col.width = Math.max((headers[i]?.length || 10) + 5, 20);
-    });
-
-    // Add data validation (dropdowns) for rows 2-201
-    const validationRows = 200;
-    for (let row = 2; row <= validationRows + 1; row++) {
-      // Column B (2) = Classification
-      ws.getCell(row, 2).dataValidation = {
-        type: 'list',
-        allowBlank: true,
-        formulae: ['"Item,Service"'],
-      };
-
-      // Column C (3) = Sub-Type (Item + Service sub-types)
-      ws.getCell(row, 3).dataValidation = {
-        type: 'list',
-        allowBlank: true,
-        formulae: ['"Direct (Nonstock),Inventory (Stock),Spare Parts,General Service,Maintenance,Consulting,Logistics,Subcontracting,Software/IT,Other"'],
-      };
-
-      // Column G (7) = UOM
-      ws.getCell(row, 7).dataValidation = {
-        type: 'list',
-        allowBlank: true,
-        formulae: ['"Each,Set,Box,Pair,Meter,mm,Roll,Sheet,Piece,kg,g,Liter,Gallon,Drum,Bag,Bundle,Case,Pack,Ton,Foot,Inch,Days,Hours,Lumpsum,Monthly,Weekly,Per Visit,Per Unit"'],
-      };
-    }
+    instWs.getColumn(1).width = 80;
+    // Style the title
+    const titleCell = instWs.getCell('A1');
+    titleCell.font = { bold: true, size: 14, color: { argb: 'FF2C3E50' } };
 
     // Generate and download
     const buffer = await wb.xlsx.writeBuffer();
-    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const blob = new Blob([buffer], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -103,6 +236,8 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ onClose }) => {
     a.click();
     URL.revokeObjectURL(url);
   };
+
+  // ──── File Parser (multi-sheet with attributes) ────
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -112,63 +247,187 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ onClose }) => {
     reader.onload = (evt) => {
       const data = new Uint8Array(evt.target?.result as ArrayBuffer);
       const workbook = XLSX.read(data, { type: 'array' });
-      const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json<Record<string, string>>(sheet);
 
-      // SheetJS returns numbers as actual number type (not strings).
-      // e.g. Oracle Code 39424902 comes back as number, .trim() would crash.
-      const toStr = (v: unknown): string => (v == null ? '' : String(v)).trim();
+      const sheetNames = workbook.SheetNames.map((n) => n.toLowerCase());
+      const hasItemsSheet = sheetNames.includes('items');
+      const hasServicesSheet = sheetNames.includes('services');
+      const isNewFormat = hasItemsSheet || hasServicesSheet;
 
-      const parsed: ParsedRow[] = rows.map((row, idx) => {
-        const errors: string[] = [];
-        const title = toStr(row['Title']);
-        const classification = toStr(row['Classification (Item/Service)']);
-        const materialSubType = toStr(row['Sub-Type']) || toStr(row['Material Sub-Type']);
-        const description = toStr(row['Description']);
-        const project = toStr(row['Project']);
-        const unspscCode = toStr(row['UNSPSC Code']);
-        const uom = toStr(row['UOM']);
+      const parsed: ParsedRow[] = [];
 
-        const VALID_ITEM_SUB_TYPES = ['Direct (Nonstock)', 'Inventory (Stock)', 'Spare Parts'];
-        const VALID_SERVICE_SUB_TYPES = ['General Service', 'Maintenance', 'Consulting', 'Logistics', 'Subcontracting', 'Software/IT', 'Other'];
-        const VALID_SUB_TYPES = [...VALID_ITEM_SUB_TYPES, ...VALID_SERVICE_SUB_TYPES];
-        const VALID_UOMS = ['Each', 'Set', 'Box', 'Pair', 'Meter', 'mm', 'Roll', 'Sheet', 'Piece', 'kg', 'g', 'Liter', 'Gallon', 'Drum', 'Bag', 'Bundle', 'Case', 'Pack', 'Ton', 'Foot', 'Inch', 'Days', 'Hours', 'Lumpsum', 'Monthly', 'Weekly', 'Per Visit', 'Per Unit'];
-
-        if (!title) errors.push('Title is required');
-        if (!classification || !['Item', 'Service'].includes(classification)) {
-          errors.push('Classification must be "Item" or "Service"');
+      if (isNewFormat) {
+        // ── New 2-sheet format ──
+        if (hasItemsSheet) {
+          const sheetName = workbook.SheetNames[sheetNames.indexOf('items')];
+          const sheet = workbook.Sheets[sheetName];
+          const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet);
+          const columns = buildColumnsForSheet(allAttributes, Classification.ITEM);
+          parseSheetRows(rows, columns, Classification.ITEM, 'Items', parsed);
         }
-        if (materialSubType && !VALID_SUB_TYPES.includes(materialSubType)) {
-          errors.push(`Invalid Sub-Type: "${materialSubType}"`);
+        if (hasServicesSheet) {
+          const sheetName = workbook.SheetNames[sheetNames.indexOf('services')];
+          const sheet = workbook.Sheets[sheetName];
+          const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet);
+          const columns = buildColumnsForSheet(allAttributes, Classification.SERVICE);
+          parseSheetRows(rows, columns, Classification.SERVICE, 'Services', parsed);
         }
-        // Cross-validate: Item sub-types can't be used with Service classification and vice versa
-        if (materialSubType && classification === 'Item' && VALID_SERVICE_SUB_TYPES.includes(materialSubType)) {
-          errors.push(`"${materialSubType}" is a Service sub-type, not valid for Item classification`);
-        }
-        if (materialSubType && classification === 'Service' && VALID_ITEM_SUB_TYPES.includes(materialSubType)) {
-          errors.push(`"${materialSubType}" is an Item sub-type, not valid for Service classification`);
-        }
-        if (uom && !VALID_UOMS.includes(uom)) {
-          errors.push(`Invalid UOM: "${uom}"`);
-        }
-        if (!project) errors.push('Project is required');
-
-        return {
-          title,
-          classification,
-          materialSubType,
-          description,
-          project,
-          unspscCode,
-          uom,
-          errors,
-        };
-      });
+      } else {
+        // ── Legacy single-sheet fallback ──
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet);
+        parseLegacyRows(rows, parsed);
+      }
 
       setParsedRows(parsed);
     };
     reader.readAsArrayBuffer(file);
+
+    // Reset file input so the same file can be re-uploaded if needed
+    e.target.value = '';
   };
+
+  /** Parse rows from the new-format Items or Services sheet */
+  const parseSheetRows = (
+    rows: Record<string, unknown>[],
+    columns: ExcelColumn[],
+    classification: Classification,
+    sourceSheet: 'Items' | 'Services',
+    out: ParsedRow[],
+  ) => {
+    const isItem = classification === Classification.ITEM;
+    const validSubTypes = isItem ? ITEM_SUB_TYPES : SERVICE_SUB_TYPES;
+    const validUoms = isItem ? ITEM_UOMS : SERVICE_UOMS;
+
+    for (const row of rows) {
+      const errors: string[] = [];
+      const warnings: string[] = [];
+
+      const title = toStr(row['Title']);
+      const subType = toStr(row['Sub-Type']);
+      const description = toStr(row['Description']);
+      const project = toStr(row['Project']);
+      const unspscCode = toStr(row['UNSPSC Code']);
+      const uom = toStr(row['UOM']);
+
+      // Hard errors — block saving
+      if (!title) errors.push('Title is required');
+      if (!project) errors.push('Project is required');
+      if (subType && !(validSubTypes as string[]).includes(subType)) {
+        errors.push(`Invalid Sub-Type: "${subType}"`);
+      }
+      if (uom && !validUoms.includes(uom)) {
+        errors.push(`Invalid UOM: "${uom}"`);
+      }
+
+      // Parse attributes from remaining columns
+      const attributes = parseRowAttributes(row, columns, allAttributes);
+
+      // Warnings — missing mandatory attributes (allow saving)
+      const mandatoryAttrs = allAttributes.filter(
+        (a) =>
+          a.mandatory &&
+          a.active &&
+          a.visibleForClassification?.includes(classification),
+      );
+      for (const attr of mandatoryAttrs) {
+        const val = attributes[attr.id];
+        let isFilled = false;
+        if (val == null) {
+          isFilled = false;
+        } else if (typeof val === 'string') {
+          isFilled = val.trim() !== '';
+        } else if (typeof val === 'number') {
+          isFilled = true;
+        } else if (Array.isArray(val)) {
+          isFilled = val.length > 0;
+        } else if (typeof val === 'object') {
+          // NUMERIC_UNIT or DIMENSION_BLOCK
+          isFilled = Object.entries(val).some(
+            ([k, v]) => k !== '_unit' && String(v || '').trim() !== '',
+          );
+        }
+        if (!isFilled) {
+          warnings.push(`Missing: ${attr.name}`);
+        }
+      }
+
+      out.push({
+        title,
+        classification,
+        subType,
+        description,
+        project,
+        unspscCode,
+        uom,
+        attributes,
+        sourceSheet,
+        errors,
+        warnings,
+      });
+    }
+  };
+
+  /** Legacy single-sheet parser (backward compatibility) */
+  const parseLegacyRows = (
+    rows: Record<string, unknown>[],
+    out: ParsedRow[],
+  ) => {
+    const ALL_SUB_TYPES = [...ITEM_SUB_TYPES, ...SERVICE_SUB_TYPES] as string[];
+    const ALL_UOMS = [...new Set([...ITEM_UOMS, ...SERVICE_UOMS])];
+
+    for (const row of rows) {
+      const errors: string[] = [];
+      const warnings: string[] = [];
+
+      const title = toStr(row['Title']);
+      const classStr = toStr(row['Classification (Item/Service)']);
+      const subType = toStr(row['Sub-Type']) || toStr(row['Material Sub-Type']);
+      const description = toStr(row['Description']);
+      const project = toStr(row['Project']);
+      const unspscCode = toStr(row['UNSPSC Code']);
+      const uom = toStr(row['UOM']);
+
+      if (!title) errors.push('Title is required');
+      if (!classStr || !['Item', 'Service'].includes(classStr)) {
+        errors.push('Classification must be "Item" or "Service"');
+      }
+      if (subType && !ALL_SUB_TYPES.includes(subType)) {
+        errors.push(`Invalid Sub-Type: "${subType}"`);
+      }
+      if (subType && classStr === 'Item' && (SERVICE_SUB_TYPES as string[]).includes(subType)) {
+        errors.push(`"${subType}" is a Service sub-type, not valid for Item`);
+      }
+      if (subType && classStr === 'Service' && (ITEM_SUB_TYPES as string[]).includes(subType)) {
+        errors.push(`"${subType}" is an Item sub-type, not valid for Service`);
+      }
+      if (uom && !ALL_UOMS.includes(uom)) {
+        errors.push(`Invalid UOM: "${uom}"`);
+      }
+      if (!project) errors.push('Project is required');
+
+      // Legacy templates have no attributes
+      warnings.push('Old template — no attribute columns. Drafts will be incomplete.');
+
+      const classification =
+        classStr === 'Service' ? Classification.SERVICE : Classification.ITEM;
+
+      out.push({
+        title,
+        classification,
+        subType,
+        description,
+        project,
+        unspscCode,
+        uom,
+        attributes: {},
+        sourceSheet: 'Legacy',
+        errors,
+        warnings,
+      });
+    }
+  };
+
+  // ──── Submission ────
 
   const handleBulkSubmit = async () => {
     const validRows = parsedRows.filter((r) => r.errors.length === 0);
@@ -179,24 +438,23 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ onClose }) => {
 
     let count = 0;
     for (const row of validRows) {
-      const isItem = row.classification === 'Item';
-      const classificationEnum = isItem ? Classification.ITEM : Classification.SERVICE;
+      const isItem = row.classification === Classification.ITEM;
       const matSubType = isItem
-        ? Object.values(MaterialSubType).find((v) => v === row.materialSubType)
+        ? Object.values(MaterialSubType).find((v) => v === row.subType)
         : undefined;
       const svcSubType = !isItem
-        ? Object.values(ServiceSubType).find((v) => v === row.materialSubType)
+        ? Object.values(ServiceSubType).find((v) => v === row.subType)
         : undefined;
 
       const newReq: Omit<RequestItem, 'id' | 'createdAt' | 'updatedAt' | 'history' | 'stageTimestamps'> = {
         requesterId: currentUser.id,
-        classification: classificationEnum,
+        classification: row.classification,
         priorityId: normalPriority?.id || 'p1',
         title: row.title,
         description: row.description,
         project: row.project,
         status: RequestStatus.DRAFT,
-        attributes: {},
+        attributes: row.attributes,
         generatedDescription: row.description,
         requestType: 'New',
         materialSubType: matSubType,
@@ -207,7 +465,6 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ onClose }) => {
 
       addRequest(newReq);
       count++;
-      // Small delay between requests to not overwhelm the system
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
 
@@ -216,12 +473,17 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ onClose }) => {
     setUploaded(true);
   };
 
+  // ──── Computed values ────
+
   const validCount = parsedRows.filter((r) => r.errors.length === 0).length;
   const errorCount = parsedRows.filter((r) => r.errors.length > 0).length;
+  const warningCount = parsedRows.filter((r) => r.errors.length === 0 && r.warnings.length > 0).length;
+
+  // ──── Render ────
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-slate-200 dark:border-slate-700">
           <div className="flex items-center gap-3">
@@ -242,8 +504,15 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ onClose }) => {
                 {uploadCount} Drafts Created
               </h3>
               <p className="text-slate-500 dark:text-slate-400">
-                All valid requests have been saved as drafts. Go to <strong>My Drafts</strong> to review, flag urgent items, and submit them.
+                All valid requests have been saved as drafts. Go to <strong>My Drafts</strong> to review,
+                complete any missing fields, and submit them.
               </p>
+              {warningCount > 0 && (
+                <p className="mt-2 text-amber-600 dark:text-amber-400 text-sm">
+                  <AlertTriangle size={14} className="inline mr-1" />
+                  {warningCount} draft(s) have missing mandatory attributes and will need to be completed before submission.
+                </p>
+              )}
               <button onClick={onClose} className="mt-6 btn-primary text-white px-6 py-2.5 rounded-lg">
                 Close
               </button>
@@ -256,10 +525,14 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ onClose }) => {
                   <Download size={16} /> Step 1: Download Template
                 </h3>
                 <p className="text-sm text-blue-700 dark:text-blue-400 mb-3">
-                  Download the Excel template, fill it with your <strong>new</strong> item/service coding requests, then upload it below.
+                  Download the Excel template with two sheets: <strong>Items</strong> and <strong>Services</strong>.
+                  Fill the relevant sheet(s) with your coding requests. Orange columns are mandatory.
                   For amendments to existing codes, use the single request form.
                 </p>
-                <button onClick={downloadTemplate} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition flex items-center gap-2">
+                <button
+                  onClick={downloadTemplate}
+                  className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition flex items-center gap-2"
+                >
                   <Download size={14} /> Download Template
                 </button>
               </div>
@@ -294,7 +567,8 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ onClose }) => {
                     Step 3: Review & Submit
                   </h3>
 
-                  <div className="flex gap-4 mb-4">
+                  {/* Summary badges */}
+                  <div className="flex gap-3 mb-4 flex-wrap">
                     <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 px-4 py-2 rounded-lg text-sm">
                       <span className="font-bold text-green-700 dark:text-green-400">{validCount}</span>{' '}
                       <span className="text-green-600 dark:text-green-500">valid rows</span>
@@ -305,42 +579,97 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ onClose }) => {
                         <span className="text-red-600 dark:text-red-500">rows with errors</span>
                       </div>
                     )}
+                    {warningCount > 0 && (
+                      <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-4 py-2 rounded-lg text-sm">
+                        <span className="font-bold text-amber-700 dark:text-amber-400">{warningCount}</span>{' '}
+                        <span className="text-amber-600 dark:text-amber-500">incomplete (missing attributes)</span>
+                      </div>
+                    )}
                   </div>
 
-                  <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-x-auto max-h-64 overflow-y-auto">
+                  {/* Review table */}
+                  <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-x-auto max-h-72 overflow-y-auto">
                     <table className="w-full text-sm">
                       <thead className="bg-slate-50 dark:bg-slate-700 sticky top-0">
                         <tr>
                           <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600 dark:text-slate-300">#</th>
+                          <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600 dark:text-slate-300">Source</th>
                           <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600 dark:text-slate-300">Title</th>
-                          <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600 dark:text-slate-300">Type</th>
                           <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600 dark:text-slate-300">Project</th>
+                          <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600 dark:text-slate-300">Attributes</th>
                           <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600 dark:text-slate-300">Status</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                        {parsedRows.map((row, idx) => (
-                          <tr key={idx} className={row.errors.length > 0 ? 'bg-red-50/50 dark:bg-red-900/10' : ''}>
-                            <td className="px-3 py-2 text-slate-500">{idx + 1}</td>
-                            <td className="px-3 py-2 text-slate-700 dark:text-slate-300 font-medium">{row.title || '(empty)'}</td>
-                            <td className="px-3 py-2 text-slate-500">{row.classification}</td>
-                            <td className="px-3 py-2 text-slate-500">{row.project}</td>
-                            <td className="px-3 py-2">
-                              {row.errors.length > 0 ? (
-                                <span className="text-red-600 dark:text-red-400 flex items-center gap-1">
-                                  <AlertTriangle size={12} /> {row.errors[0]}
+                        {parsedRows.map((row, idx) => {
+                          const attrCount = Object.keys(row.attributes).length;
+                          return (
+                            <tr
+                              key={idx}
+                              className={
+                                row.errors.length > 0
+                                  ? 'bg-red-50/50 dark:bg-red-900/10'
+                                  : row.warnings.length > 0
+                                  ? 'bg-amber-50/30 dark:bg-amber-900/10'
+                                  : ''
+                              }
+                            >
+                              <td className="px-3 py-2 text-slate-500">{idx + 1}</td>
+                              <td className="px-3 py-2">
+                                <span
+                                  className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                                    row.sourceSheet === 'Items'
+                                      ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+                                      : row.sourceSheet === 'Services'
+                                      ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300'
+                                      : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400'
+                                  }`}
+                                >
+                                  {row.sourceSheet}
                                 </span>
-                              ) : (
-                                <span className="text-green-600 dark:text-green-400 flex items-center gap-1">
-                                  <CheckCircle size={12} /> Valid
-                                </span>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
+                              </td>
+                              <td className="px-3 py-2 text-slate-700 dark:text-slate-300 font-medium max-w-[200px] truncate">
+                                {row.title || '(empty)'}
+                              </td>
+                              <td className="px-3 py-2 text-slate-500">{row.project}</td>
+                              <td className="px-3 py-2 text-slate-500 text-xs">
+                                {attrCount > 0 ? `${attrCount} filled` : '—'}
+                              </td>
+                              <td className="px-3 py-2">
+                                {row.errors.length > 0 ? (
+                                  <span className="text-red-600 dark:text-red-400 flex items-center gap-1 text-xs" title={row.errors.join('; ')}>
+                                    <AlertTriangle size={12} /> {row.errors[0]}
+                                  </span>
+                                ) : row.warnings.length > 0 ? (
+                                  <span
+                                    className="text-amber-600 dark:text-amber-400 flex items-center gap-1 text-xs cursor-help"
+                                    title={row.warnings.join('\n')}
+                                  >
+                                    <Info size={12} /> Incomplete ({row.warnings.length})
+                                  </span>
+                                ) : (
+                                  <span className="text-green-600 dark:text-green-400 flex items-center gap-1 text-xs">
+                                    <CheckCircle size={12} /> Complete
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
+
+                  {/* Info note for warnings */}
+                  {warningCount > 0 && (
+                    <div className="mt-3 flex items-start gap-2 text-sm text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-3 rounded-lg">
+                      <Info size={16} className="mt-0.5 shrink-0" />
+                      <span>
+                        Rows marked "Incomplete" are missing mandatory attribute fields.
+                        They will be saved as drafts — you can complete them from the <strong>My Drafts</strong> page before submitting.
+                      </span>
+                    </div>
+                  )}
 
                   <div className="mt-4 flex justify-end">
                     <button

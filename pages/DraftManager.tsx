@@ -13,13 +13,22 @@ import {
   ChevronDown,
   ChevronUp,
   Info,
+  CheckCircle,
+  Edit3,
 } from 'lucide-react';
 import { useRequestStore, useUserStore, useAdminStore } from '../stores';
 import { RequestStatus, Role, hasRole } from '../types';
+import {
+  getMissingMandatoryAttributes,
+  isDraftComplete,
+  type MissingField,
+} from '../lib/bulkUploadHelpers';
 
 // ────────────────── Bulk Submit Modal ──────────────────
 interface BulkSubmitModalProps {
   selectedIds: string[];
+  incompleteCount: number;
+  completeCount: number;
   onClose: () => void;
   onSubmit: (priorityId: string, managerId: string, reason: string) => void;
   submitting: boolean;
@@ -27,6 +36,8 @@ interface BulkSubmitModalProps {
 
 const BulkSubmitModal: React.FC<BulkSubmitModalProps> = ({
   selectedIds,
+  incompleteCount,
+  completeCount,
   onClose,
   onSubmit,
   submitting,
@@ -56,7 +67,11 @@ const BulkSubmitModal: React.FC<BulkSubmitModalProps> = ({
   const selectedPriority = activePriorities.find((p) => p.id === priorityId);
   const isUrgent = selectedPriority && selectedPriority.requiresApproval;
 
-  const canSubmit = priorityId && reason.trim().length > 0 && (!isUrgent || managerId);
+  const canSubmit =
+    priorityId &&
+    reason.trim().length > 0 &&
+    (!isUrgent || managerId) &&
+    completeCount > 0;
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
@@ -67,7 +82,7 @@ const BulkSubmitModal: React.FC<BulkSubmitModalProps> = ({
             <Send className="text-blue-600 dark:text-blue-400" size={22} />
             <div>
               <h2 className="text-lg font-bold text-slate-800 dark:text-slate-200">
-                Submit {selectedIds.length} Request{selectedIds.length > 1 ? 's' : ''}
+                Submit Request{completeCount > 1 ? 's' : ''}
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                 All selected items will share the same settings
@@ -81,6 +96,27 @@ const BulkSubmitModal: React.FC<BulkSubmitModalProps> = ({
 
         {/* Body */}
         <div className="p-6 space-y-5">
+          {/* Incomplete warning banner */}
+          {incompleteCount > 0 && (
+            <div className="flex items-start gap-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+              <AlertTriangle size={16} className="text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
+              <p className="text-xs text-amber-700 dark:text-amber-300">
+                <strong>{incompleteCount}</strong> draft{incompleteCount > 1 ? 's are' : ' is'} incomplete
+                (missing mandatory attributes) and will be <strong>skipped</strong>.
+                Only <strong>{completeCount}</strong> complete draft{completeCount > 1 ? 's' : ''} will be submitted.
+              </p>
+            </div>
+          )}
+
+          {completeCount === 0 && (
+            <div className="flex items-start gap-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
+              <AlertTriangle size={16} className="text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
+              <p className="text-xs text-red-700 dark:text-red-300">
+                All selected drafts are incomplete. Please complete the mandatory fields before submitting.
+              </p>
+            </div>
+          )}
+
           {/* Priority */}
           <div>
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
@@ -181,7 +217,9 @@ const BulkSubmitModal: React.FC<BulkSubmitModalProps> = ({
             ) : (
               <>
                 <Send size={16} />
-                {isUrgent ? 'Submit as Urgent' : 'Submit to Coding Team'}
+                {isUrgent
+                  ? `Submit ${completeCount} as Urgent`
+                  : `Submit ${completeCount} to Coding Team`}
               </>
             )}
           </button>
@@ -200,6 +238,7 @@ export const DraftManager: React.FC = () => {
   const currentUser = useUserStore((s) => s.currentUser);
   const users = useUserStore((s) => s.users);
   const priorities = useAdminStore((s) => s.priorities);
+  const allAttributeDefs = useAdminStore((s) => s.attributes);
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showModal, setShowModal] = useState(false);
@@ -222,8 +261,30 @@ export const DraftManager: React.FC = () => {
     [requests, currentUser.id, sortField, sortDir]
   );
 
+  // Compute completeness per draft
+  const completenessMap = useMemo(() => {
+    const map = new Map<string, { complete: boolean; missing: MissingField[] }>();
+    for (const d of drafts) {
+      const missing = getMissingMandatoryAttributes(d.classification, d.attributes, allAttributeDefs);
+      map.set(d.id, { complete: missing.length === 0, missing });
+    }
+    return map;
+  }, [drafts, allAttributeDefs]);
+
   const allSelected = drafts.length > 0 && selectedIds.size === drafts.length;
   const someSelected = selectedIds.size > 0;
+
+  // Count complete vs incomplete among selected
+  const selectedComplete = useMemo(() => {
+    let complete = 0;
+    let incomplete = 0;
+    for (const id of selectedIds) {
+      const info = completenessMap.get(id);
+      if (info?.complete) complete++;
+      else incomplete++;
+    }
+    return { complete, incomplete };
+  }, [selectedIds, completenessMap]);
 
   const toggleAll = () => {
     if (allSelected) {
@@ -275,7 +336,7 @@ export const DraftManager: React.FC = () => {
     setSelectedIds(new Set());
   };
 
-  // Bulk submit
+  // Bulk submit — only submit COMPLETE drafts
   const handleBulkSubmit = async (priorityId: string, managerId: string, reason: string) => {
     setSubmitting(true);
 
@@ -285,7 +346,12 @@ export const DraftManager: React.FC = () => {
 
     const targetStatus = isUrgent ? RequestStatus.PENDING_APPROVAL : RequestStatus.SUBMITTED_TO_POC;
 
-    for (const id of Array.from(selectedIds)) {
+    // Only submit complete drafts
+    const idsToSubmit = Array.from(selectedIds).filter(
+      (id) => completenessMap.get(id)?.complete
+    );
+
+    for (const id of idsToSubmit) {
       // First update fields (priority, manager, justification)
       const fieldUpdates: Partial<typeof requests[0]> = {
         priorityId,
@@ -328,7 +394,7 @@ export const DraftManager: React.FC = () => {
             My Drafts
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Review imported requests, flag urgent ones, and submit them in bulk.
+            Review imported requests, complete missing fields, and submit them in bulk.
           </p>
         </div>
         <div className="text-sm text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-4 py-2 rounded-lg">
@@ -361,6 +427,11 @@ export const DraftManager: React.FC = () => {
             <div className="bg-blue-50 dark:bg-blue-900/20 border-b border-blue-200 dark:border-blue-800 px-4 py-3 flex items-center justify-between">
               <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
                 {selectedIds.size} selected
+                {selectedComplete.incomplete > 0 && (
+                  <span className="text-amber-600 dark:text-amber-400 ml-2 text-xs">
+                    ({selectedComplete.incomplete} incomplete)
+                  </span>
+                )}
               </span>
               <div className="flex items-center gap-2">
                 <button
@@ -414,7 +485,7 @@ export const DraftManager: React.FC = () => {
                     <span className="flex items-center gap-1">Project <SortIcon field="project" /></span>
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
-                    Type
+                    Completeness
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
                     UOM
@@ -425,84 +496,106 @@ export const DraftManager: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                {drafts.map((d) => (
-                  <tr
-                    key={d.id}
-                    className={`transition-colors ${
-                      selectedIds.has(d.id)
-                        ? 'bg-blue-50/60 dark:bg-blue-900/10'
-                        : 'hover:bg-slate-50 dark:hover:bg-slate-700/30'
-                    }`}
-                  >
-                    <td className="px-4 py-3">
-                      <button onClick={() => toggleOne(d.id)} className="text-slate-400 hover:text-blue-600 transition" aria-label={`Select ${d.title}`}>
-                        {selectedIds.has(d.id) ? (
-                          <CheckSquare size={18} className="text-blue-600 dark:text-blue-400" />
-                        ) : (
-                          <Square size={18} />
-                        )}
-                      </button>
-                    </td>
-                    <td className="px-4 py-3">
-                      <button
-                        onClick={() => navigate(`/requests/${d.id}`)}
-                        className="text-blue-600 dark:text-blue-400 hover:underline font-medium text-left"
-                      >
-                        {d.title}
-                      </button>
-                      <div className="text-[11px] text-slate-400 mt-0.5">{d.id}</div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${
-                        d.classification === 'Item'
-                          ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                          : 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
-                      }`}>
-                        {d.classification}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-slate-600 dark:text-slate-400 text-xs">
-                      {d.materialSubType || '—'}
-                    </td>
-                    <td className="px-4 py-3 text-slate-600 dark:text-slate-400">{d.project || '—'}</td>
-                    <td className="px-4 py-3">
-                      <span className={`text-xs font-medium ${
-                        d.requestType === 'Amendment'
-                          ? 'text-amber-600 dark:text-amber-400'
-                          : 'text-slate-600 dark:text-slate-400'
-                      }`}>
-                        {d.requestType || 'New'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-slate-600 dark:text-slate-400 text-xs">{d.uom || '—'}</td>
-                    <td className="px-4 py-3 text-right">
-                      {deleteConfirmId === d.id ? (
-                        <div className="flex items-center justify-end gap-1">
-                          <button
-                            onClick={() => handleDelete(d.id)}
-                            className="px-2 py-1 text-xs text-white bg-red-600 hover:bg-red-700 rounded transition"
-                          >
-                            Confirm
-                          </button>
-                          <button
-                            onClick={() => setDeleteConfirmId(null)}
-                            className="px-2 py-1 text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => setDeleteConfirmId(d.id)}
-                          className="text-slate-400 hover:text-red-500 transition p-1"
-                          aria-label={`Delete draft ${d.title}`}
-                        >
-                          <Trash2 size={15} />
+                {drafts.map((d) => {
+                  const info = completenessMap.get(d.id);
+                  const isComplete = info?.complete ?? true;
+                  const missingFields = info?.missing ?? [];
+
+                  return (
+                    <tr
+                      key={d.id}
+                      className={`transition-colors ${
+                        selectedIds.has(d.id)
+                          ? 'bg-blue-50/60 dark:bg-blue-900/10'
+                          : 'hover:bg-slate-50 dark:hover:bg-slate-700/30'
+                      }`}
+                    >
+                      <td className="px-4 py-3">
+                        <button onClick={() => toggleOne(d.id)} className="text-slate-400 hover:text-blue-600 transition" aria-label={`Select ${d.title}`}>
+                          {selectedIds.has(d.id) ? (
+                            <CheckSquare size={18} className="text-blue-600 dark:text-blue-400" />
+                          ) : (
+                            <Square size={18} />
+                          )}
                         </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="px-4 py-3">
+                        <button
+                          onClick={() => navigate(`/requests/${d.id}`)}
+                          className="text-blue-600 dark:text-blue-400 hover:underline font-medium text-left"
+                        >
+                          {d.title}
+                        </button>
+                        <div className="text-[11px] text-slate-400 mt-0.5">{d.id}</div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${
+                          d.classification === 'Item'
+                            ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                            : 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
+                        }`}>
+                          {d.classification}
+                        </span>
+                      </td>
+                      {/* Bug #22 fix: show serviceSubType when materialSubType is empty */}
+                      <td className="px-4 py-3 text-slate-600 dark:text-slate-400 text-xs">
+                        {d.materialSubType || d.serviceSubType || '—'}
+                      </td>
+                      <td className="px-4 py-3 text-slate-600 dark:text-slate-400">{d.project || '—'}</td>
+                      {/* Completeness column */}
+                      <td className="px-4 py-3">
+                        {isComplete ? (
+                          <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/20 px-2 py-0.5 rounded-full">
+                            <CheckCircle size={12} /> Complete
+                          </span>
+                        ) : (
+                          <div className="flex items-center gap-1.5">
+                            <span
+                              className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-2 py-0.5 rounded-full cursor-help"
+                              title={`Missing: ${missingFields.map((f) => f.attrName).join(', ')}`}
+                            >
+                              <AlertTriangle size={12} /> Incomplete ({missingFields.length})
+                            </span>
+                            <button
+                              onClick={() => navigate(`/new-request/${d.id}`)}
+                              className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition"
+                              title="Edit to complete missing fields"
+                            >
+                              <Edit3 size={13} />
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-slate-600 dark:text-slate-400 text-xs">{d.uom || '—'}</td>
+                      <td className="px-4 py-3 text-right">
+                        {deleteConfirmId === d.id ? (
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              onClick={() => handleDelete(d.id)}
+                              className="px-2 py-1 text-xs text-white bg-red-600 hover:bg-red-700 rounded transition"
+                            >
+                              Confirm
+                            </button>
+                            <button
+                              onClick={() => setDeleteConfirmId(null)}
+                              className="px-2 py-1 text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setDeleteConfirmId(d.id)}
+                            className="text-slate-400 hover:text-red-500 transition p-1"
+                            aria-label={`Delete draft ${d.title}`}
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -513,6 +606,8 @@ export const DraftManager: React.FC = () => {
       {showModal && (
         <BulkSubmitModal
           selectedIds={Array.from(selectedIds)}
+          incompleteCount={selectedComplete.incomplete}
+          completeCount={selectedComplete.complete}
           onClose={() => setShowModal(false)}
           onSubmit={handleBulkSubmit}
           submitting={submitting}
