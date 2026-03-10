@@ -184,7 +184,7 @@ export const NewRequest: React.FC = () => {
         attr.dimensionFields?.forEach(field => {
           if (dimVal[field]) dims.push(`${field.charAt(0)}${dimVal[field]}`);
         });
-        if (dims.length > 0) parts.push(dims.join('x') + 'mm');
+        if (dims.length > 0) parts.push(dims.join('x') + (dimVal._unit || 'mm'));
       } else if (attr.type === AttributeType.MULTI_SELECT && Array.isArray(val)) {
         if (val.length > 0) parts.push(val.join('/'));
       }

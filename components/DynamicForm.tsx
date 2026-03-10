@@ -153,7 +153,7 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({ attributes, values, on
                         id={`field-${attr.id}-${field}`}
                         type="number"
                         disabled={readOnly}
-                        aria-label={`${attr.name} ${field} in mm`}
+                        aria-label={`${attr.name} ${field}`}
                         value={values[attr.id]?.[field] || ''}
                         onChange={(e) => handleChange(attr.id, { ...values[attr.id], [field]: e.target.value })}
                         className={`text-sm ${inputClasses}`}
@@ -161,7 +161,23 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({ attributes, values, on
                     </div>
                   </div>
                 ))}
-                <div className="col-span-3 text-xs text-slate-400 text-right" aria-live="polite">Unit: mm (Default)</div>
+                <div className="col-span-3 flex items-center justify-end gap-2">
+                  <label htmlFor={`field-${attr.id}-_unit`} className="text-xs font-medium text-slate-500 dark:text-slate-400">Unit:</label>
+                  <select
+                    id={`field-${attr.id}-_unit`}
+                    disabled={readOnly}
+                    aria-label={`${attr.name} unit`}
+                    value={values[attr.id]?._unit || 'mm'}
+                    onChange={(e) => handleChange(attr.id, { ...values[attr.id], _unit: e.target.value })}
+                    className="text-sm px-2 py-1 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:border-blue-500 focus:ring-blue-500/20 transition"
+                  >
+                    <option value="mm">mm</option>
+                    <option value="cm">cm</option>
+                    <option value="m">m</option>
+                    <option value="inches">inches</option>
+                    <option value="feet">feet</option>
+                  </select>
+                </div>
               </div>
             </fieldset>
           )}
