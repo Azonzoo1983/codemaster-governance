@@ -228,7 +228,7 @@ export const NewRequest: React.FC = () => {
         }
         break;
       case 3:
-        if (!formData.title?.trim()) errors.push('Request Title is required.');
+        // Title auto-derived from short description at submit time
         if (!formData.project?.trim()) errors.push('Project Code is required.');
         relevantAttributes.filter(a => a.mandatory).forEach(a => {
           const val = formData.attributes?.[a.id];
@@ -313,7 +313,7 @@ export const NewRequest: React.FC = () => {
         requesterId: currentUser.id,
         classification: formData.classification!,
         priorityId: formData.priorityId!,
-        title: formData.title!.trim(),
+        title: (formData.shortDescription || generatedDescription?.slice(0, 240) || formData.classification || 'New Request').trim(),
         description: formData.description || generatedDescription || '',
         project: formData.project!.trim(),
         status: initialStatus,
@@ -751,21 +751,6 @@ export const NewRequest: React.FC = () => {
               </p>
             </div>
 
-            {/* Additional Description */}
-            <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                Additional Description
-                <HelpTooltip text="Provide details about the item or service. An auto-description will also be generated from attributes" />
-              </label>
-              <textarea
-                className="w-full rounded-lg border-slate-300 dark:border-slate-600 shadow-sm border p-2.5 focus:border-blue-500 focus:ring-blue-500/20 transition bg-white dark:bg-slate-700 dark:text-slate-200 dark:placeholder-slate-400"
-                rows={3}
-                value={formData.description || ''}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                placeholder="Optional: add any additional details not captured by the attributes above..."
-              />
-            </div>
-
             {/* UNSPSC Code */}
             <div>
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
@@ -839,19 +824,6 @@ export const NewRequest: React.FC = () => {
 
             {/* Core Fields */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Request Title <span className="text-red-500">*</span><HelpTooltip text="Enter a brief, descriptive title summarizing what needs to be coded" /></label>
-                <input
-                  type="text"
-                  className="w-full rounded-lg border-slate-300 dark:border-slate-600 shadow-sm border p-2.5 focus:border-blue-500 focus:ring-blue-500/20 transition bg-white dark:bg-slate-700 dark:text-slate-200 dark:placeholder-slate-400"
-                  value={formData.title || ''}
-                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                  placeholder={formData.classification === Classification.SERVICE ? "e.g. Plumbing Service" : "e.g. Ball Bearing SKF 6205-2RS"}
-                  aria-required="true"
-                  aria-describedby={validationErrors.length > 0 ? 'validation-errors' : undefined}
-                />
-              </div>
-
               <div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Project Code <span className="text-red-500">*</span></label>
                 <input
@@ -1117,10 +1089,6 @@ export const NewRequest: React.FC = () => {
                     <span className="font-medium text-slate-800 dark:text-slate-200">{formData.existingCode}</span>
                   </div>
                 )}
-                <div className="flex justify-between py-2 border-b border-slate-200/60 dark:border-slate-700/60">
-                  <span className="text-slate-500 dark:text-slate-400">Title</span>
-                  <span className="font-medium text-slate-800 dark:text-slate-200 text-right max-w-[200px] truncate">{formData.title}</span>
-                </div>
                 <div className="flex justify-between py-2 border-b border-slate-200/60 dark:border-slate-700/60">
                   <span className="text-slate-500 dark:text-slate-400">Project Code</span>
                   <span className="font-medium text-slate-800 dark:text-slate-200">{formData.project}</span>
