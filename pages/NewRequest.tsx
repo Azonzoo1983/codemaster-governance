@@ -218,7 +218,10 @@ export const NewRequest: React.FC = () => {
             errors.push('Existing Oracle Code is required for amendments.');
           }
           if (!formData.existingDescription?.trim()) {
-            errors.push('Existing Oracle Description is required for amendments.');
+            errors.push('Current Oracle Description is required for amendments.');
+          }
+          if (!formData.proposedDescription?.trim()) {
+            errors.push('New Proposed Description is required for amendments.');
           }
         } else {
           // Classification/Sub-type validation only for New requests
@@ -258,6 +261,8 @@ export const NewRequest: React.FC = () => {
     return errors;
   };
 
+  const isAmendment = formData.requestType === 'Amendment';
+
   const handleNext = () => {
     const errors = validateStep(step);
     if (errors.length > 0) {
@@ -266,16 +271,28 @@ export const NewRequest: React.FC = () => {
       return;
     }
     setValidationErrors([]);
-    setStep(prev => Math.min(prev + 1, TOTAL_STEPS));
+    // Amendments skip Step 3 (Details & Attributes) — go from Step 2 directly to Step 4
+    if (isAmendment && step === 2) {
+      setStep(4);
+    } else {
+      setStep(prev => Math.min(prev + 1, TOTAL_STEPS));
+    }
   };
 
   const handleBack = () => {
     setValidationErrors([]);
-    setStep(prev => Math.max(prev - 1, 1));
+    // Amendments skip Step 3 — go from Step 4 back to Step 2
+    if (isAmendment && step === 4) {
+      setStep(2);
+    } else {
+      setStep(prev => Math.max(prev - 1, 1));
+    }
   };
 
   const handleSubmit = () => {
-    const allErrors = [...validateStep(2), ...validateStep(3), ...validateStep(4)];
+    const allErrors = isAmendment
+      ? [...validateStep(2), ...validateStep(4)]
+      : [...validateStep(2), ...validateStep(3), ...validateStep(4)];
     if (allErrors.length > 0) {
       setValidationErrors(allErrors);
       addToast(allErrors[0], 'warning');
@@ -335,6 +352,7 @@ export const NewRequest: React.FC = () => {
         uom: formData.uom || '',
         unspscCode: formData.unspscCode || '',
         resourceCode: formData.resourceCode || '',
+        proposedDescription: formData.proposedDescription || '',
         attachments: formData.attachments || []
       };
 
@@ -434,7 +452,9 @@ export const NewRequest: React.FC = () => {
     }
   };
 
-  const stepLabels = ['Database Check', 'Classification', 'Details & Attributes', 'Priority & Review'];
+  const stepLabels = isAmendment
+    ? ['Database Check', 'Amendment Details', 'Details & Attributes', 'Priority & Review']
+    : ['Database Check', 'Classification', 'Details & Attributes', 'Priority & Review'];
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -488,7 +508,9 @@ export const NewRequest: React.FC = () => {
               Save Draft
             </button>
           )}
-          <div className="text-sm text-slate-500 dark:text-slate-400 font-medium">Step {step} of {TOTAL_STEPS}</div>
+          <div className="text-sm text-slate-500 dark:text-slate-400 font-medium">
+            Step {isAmendment ? (step <= 2 ? step : step - 1) : step} of {isAmendment ? TOTAL_STEPS - 1 : TOTAL_STEPS}
+          </div>
         </div>
       </div>
 
@@ -496,6 +518,8 @@ export const NewRequest: React.FC = () => {
       <div className="flex items-center gap-1" role="list" aria-label="Request form steps">
         {stepLabels.map((label, i) => {
           const stepNum = i + 1;
+          // Hide Step 3 for amendments
+          if (isAmendment && stepNum === 3) return null;
           const isActive = step === stepNum;
           const isCompleted = step > stepNum || (stepNum === 1 && dbChecked);
           const canClick = isCompleted && !isActive;
@@ -637,7 +661,7 @@ export const NewRequest: React.FC = () => {
                 {/* Existing Oracle Description */}
                 <div className="mt-4">
                   <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                    Existing Oracle Description <span className="text-red-500">*</span>
+                    Current Oracle Description <span className="text-red-500">*</span>
                   </label>
                   <textarea
                     className="w-full rounded-lg border-slate-300 dark:border-slate-600 shadow-sm border p-2.5 focus:border-blue-500 focus:ring-blue-500/20 transition bg-white dark:bg-slate-700 dark:text-slate-200"
@@ -645,6 +669,19 @@ export const NewRequest: React.FC = () => {
                     value={formData.existingDescription || ''}
                     onChange={(e) => setFormData({ ...formData, existingDescription: e.target.value })}
                     placeholder="Enter the current Oracle description..."
+                  />
+                </div>
+                {/* New Proposed Description */}
+                <div className="mt-4">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    New Proposed Description <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    className="w-full rounded-lg border-slate-300 dark:border-slate-600 shadow-sm border p-2.5 focus:border-blue-500 focus:ring-blue-500/20 transition bg-white dark:bg-slate-700 dark:text-slate-200"
+                    rows={3}
+                    value={formData.proposedDescription || ''}
+                    onChange={(e) => setFormData({ ...formData, proposedDescription: e.target.value })}
+                    placeholder="Enter the new proposed description..."
                   />
                 </div>
               </div>

@@ -142,6 +142,7 @@ export interface RequestItem {
 
   // Amendment fields
   existingDescription?: string; // Current Oracle description for amendments
+  proposedDescription?: string; // New proposed description for amendments
 
   // Short & Long descriptions
   shortDescription?: string; // Max 240 chars - editable until completion
