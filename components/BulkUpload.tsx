@@ -3,7 +3,6 @@ import { Upload, Download, FileSpreadsheet, X, CheckCircle, AlertTriangle, Loade
 import { useRequestStore, useUserStore, useAdminStore } from '../stores';
 import { Classification, MaterialSubType, RequestStatus, RequestItem } from '../types';
 import * as XLSX from 'xlsx';
-import ExcelJS from 'exceljs';
 
 interface BulkUploadProps {
   onClose: () => void;
@@ -33,7 +32,10 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ onClose }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const downloadTemplate = async () => {
-    const wb = new ExcelJS.Workbook();
+    // Dynamic import — ExcelJS needs Node.js polyfills, so we load it lazily
+    // to avoid breaking the rest of the component if polyfills aren't perfect
+    const ExcelJS = await import('exceljs');
+    const wb = new ExcelJS.default.Workbook();
     const ws = wb.addWorksheet('Bulk Upload Template');
 
     // Define headers

@@ -15,11 +15,15 @@ export default defineConfig(({ mode }) => {
       plugins: [react(), tailwindcss()],
       define: {
         'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-        'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)
+        'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
+        // ExcelJS needs global Buffer available in browser
+        'global': 'globalThis',
       },
       resolve: {
         alias: {
           '@': path.resolve(__dirname, '.'),
+          // Polyfill buffer for ExcelJS browser compatibility
+          buffer: 'buffer/',
         }
       },
       test: {
