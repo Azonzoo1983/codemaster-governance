@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import {
   Upload, Download, FileSpreadsheet, X, CheckCircle, AlertTriangle,
-  Loader2, Info,
+  Loader2,
 } from 'lucide-react';
 import { useRequestStore, useUserStore, useAdminStore } from '../stores';
 import {
@@ -209,8 +209,8 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ onClose }) => {
       ['  - Dimension fields: fill at least one dimension value + the unit.'],
       ['  - Numeric + Unit fields: fill the value column; unit column has a dropdown.'],
       ['  - You can fill both sheets in one upload.'],
-      ['  - Missing mandatory attribute fields will create "Incomplete" drafts.'],
-      ['    You can complete them later from the My Drafts page before submitting.'],
+      ['  - Rows with missing mandatory fields (orange columns) will be REJECTED.'],
+      ['    Make sure all orange columns are filled before uploading.'],
       [''],
       ['AMENDMENTS:'],
       ['  Amendments to existing Oracle codes should be created via the single request form,'],
@@ -322,7 +322,7 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ onClose }) => {
       // Parse attributes from remaining columns
       const attributes = parseRowAttributes(row, columns, allAttributes);
 
-      // Warnings — missing mandatory attributes (allow saving)
+      // Missing mandatory attributes = ERRORS (block saving — user must fix the Excel)
       const mandatoryAttrs = allAttributes.filter(
         (a) =>
           a.mandatory &&
@@ -347,7 +347,7 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ onClose }) => {
           );
         }
         if (!isFilled) {
-          warnings.push(`Missing: ${attr.name}`);
+          errors.push(`Missing mandatory: ${attr.name}`);
         }
       }
 
@@ -433,6 +433,7 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ onClose }) => {
     const validRows = parsedRows.filter((r) => r.errors.length === 0);
     if (validRows.length === 0) return;
 
+
     setUploading(true);
     const normalPriority = priorities.find((p) => p.name === 'Normal') || priorities[0];
 
@@ -475,10 +476,8 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ onClose }) => {
 
   // ──── Computed values ────
 
-  const savableCount = parsedRows.filter((r) => r.errors.length === 0).length;
-  const completeCount = parsedRows.filter((r) => r.errors.length === 0 && r.warnings.length === 0).length;
+  const validCount = parsedRows.filter((r) => r.errors.length === 0).length;
   const errorCount = parsedRows.filter((r) => r.errors.length > 0).length;
-  const warningCount = parsedRows.filter((r) => r.errors.length === 0 && r.warnings.length > 0).length;
 
   // ──── Render ────
 
@@ -505,15 +504,9 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ onClose }) => {
                 {uploadCount} Drafts Created
               </h3>
               <p className="text-slate-500 dark:text-slate-400">
-                All valid requests have been saved as drafts. Go to <strong>My Drafts</strong> to review,
-                complete any missing fields, and submit them.
+                All valid requests have been saved as drafts. Go to <strong>My Drafts</strong> to review
+                and submit them in bulk.
               </p>
-              {warningCount > 0 && (
-                <p className="mt-2 text-amber-600 dark:text-amber-400 text-sm">
-                  <AlertTriangle size={14} className="inline mr-1" />
-                  {warningCount} draft(s) have missing mandatory attributes and will need to be completed before submission.
-                </p>
-              )}
               <button onClick={onClose} className="mt-6 btn-primary text-white px-6 py-2.5 rounded-lg">
                 Close
               </button>
@@ -571,19 +564,13 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ onClose }) => {
                   {/* Summary badges */}
                   <div className="flex gap-3 mb-4 flex-wrap">
                     <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 px-4 py-2 rounded-lg text-sm">
-                      <span className="font-bold text-green-700 dark:text-green-400">{completeCount}</span>{' '}
-                      <span className="text-green-600 dark:text-green-500">complete</span>
+                      <span className="font-bold text-green-700 dark:text-green-400">{validCount}</span>{' '}
+                      <span className="text-green-600 dark:text-green-500">valid rows</span>
                     </div>
-                    {warningCount > 0 && (
-                      <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-4 py-2 rounded-lg text-sm">
-                        <span className="font-bold text-amber-700 dark:text-amber-400">{warningCount}</span>{' '}
-                        <span className="text-amber-600 dark:text-amber-500">incomplete (missing attributes)</span>
-                      </div>
-                    )}
                     {errorCount > 0 && (
                       <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-4 py-2 rounded-lg text-sm">
                         <span className="font-bold text-red-700 dark:text-red-400">{errorCount}</span>{' '}
-                        <span className="text-red-600 dark:text-red-500">rejected (missing title/project)</span>
+                        <span className="text-red-600 dark:text-red-500">rejected</span>
                       </div>
                     )}
                   </div>
@@ -604,16 +591,11 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ onClose }) => {
                       <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
                         {parsedRows.map((row, idx) => {
                           const attrCount = Object.keys(row.attributes).length;
+                          const hasErrors = row.errors.length > 0;
                           return (
                             <tr
                               key={idx}
-                              className={
-                                row.errors.length > 0
-                                  ? 'bg-red-50/50 dark:bg-red-900/10'
-                                  : row.warnings.length > 0
-                                  ? 'bg-amber-50/30 dark:bg-amber-900/10'
-                                  : ''
-                              }
+                              className={hasErrors ? 'bg-red-50/50 dark:bg-red-900/10' : ''}
                             >
                               <td className="px-3 py-2 text-slate-500">{idx + 1}</td>
                               <td className="px-3 py-2">
@@ -637,20 +619,16 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ onClose }) => {
                                 {attrCount > 0 ? `${attrCount} filled` : '—'}
                               </td>
                               <td className="px-3 py-2">
-                                {row.errors.length > 0 ? (
-                                  <span className="text-red-600 dark:text-red-400 flex items-center gap-1 text-xs" title={row.errors.join('; ')}>
-                                    <AlertTriangle size={12} /> {row.errors[0]}
-                                  </span>
-                                ) : row.warnings.length > 0 ? (
+                                {hasErrors ? (
                                   <span
-                                    className="text-amber-600 dark:text-amber-400 flex items-center gap-1 text-xs cursor-help"
-                                    title={row.warnings.join('\n')}
+                                    className="text-red-600 dark:text-red-400 flex items-center gap-1 text-xs cursor-help"
+                                    title={row.errors.join('\n')}
                                   >
-                                    <Info size={12} /> Incomplete ({row.warnings.length})
+                                    <AlertTriangle size={12} /> {row.errors[0]}{row.errors.length > 1 ? ` (+${row.errors.length - 1})` : ''}
                                   </span>
                                 ) : (
                                   <span className="text-green-600 dark:text-green-400 flex items-center gap-1 text-xs">
-                                    <CheckCircle size={12} /> Complete
+                                    <CheckCircle size={12} /> Valid
                                   </span>
                                 )}
                               </td>
@@ -661,13 +639,13 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ onClose }) => {
                     </table>
                   </div>
 
-                  {/* Info note for warnings */}
-                  {warningCount > 0 && (
-                    <div className="mt-3 flex items-start gap-2 text-sm text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-3 rounded-lg">
-                      <Info size={16} className="mt-0.5 shrink-0" />
+                  {/* Helpful note when there are rejected rows */}
+                  {errorCount > 0 && (
+                    <div className="mt-3 flex items-start gap-2 text-sm text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-3 rounded-lg">
+                      <AlertTriangle size={16} className="mt-0.5 shrink-0" />
                       <span>
-                        Rows marked "Incomplete" are missing mandatory attribute fields.
-                        They will be saved as drafts — you can complete them from the <strong>My Drafts</strong> page before submitting.
+                        Rejected rows are missing required fields (title, project, or mandatory attributes).
+                        Fix them in the Excel file and re-upload. Only valid rows will be saved.
                       </span>
                     </div>
                   )}
@@ -675,7 +653,7 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ onClose }) => {
                   <div className="mt-4 flex justify-end">
                     <button
                       onClick={handleBulkSubmit}
-                      disabled={uploading || savableCount === 0}
+                      disabled={uploading || validCount === 0}
                       className="btn-primary text-white px-6 py-2.5 rounded-lg flex items-center gap-2 disabled:opacity-50"
                     >
                       {uploading ? (
@@ -684,7 +662,7 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ onClose }) => {
                         </>
                       ) : (
                         <>
-                          <Upload size={16} /> Save {savableCount} as Drafts{warningCount > 0 ? ` (${warningCount} incomplete)` : ''}
+                          <Upload size={16} /> Save {validCount} as Drafts
                         </>
                       )}
                     </button>
