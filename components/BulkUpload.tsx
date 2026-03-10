@@ -126,17 +126,21 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ onClose }) => {
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json<Record<string, string>>(sheet);
 
+      // SheetJS returns numbers as actual number type (not strings).
+      // e.g. Oracle Code 39424902 comes back as number, .trim() would crash.
+      const toStr = (v: unknown): string => (v == null ? '' : String(v)).trim();
+
       const parsed: ParsedRow[] = rows.map((row, idx) => {
         const errors: string[] = [];
-        const title = (row['Title'] || '').trim();
-        const classification = (row['Classification (Item/Service)'] || '').trim();
-        const materialSubType = (row['Material Sub-Type'] || '').trim();
-        const requestType = (row['Request Type (New/Amendment)'] || 'New').trim();
-        const existingCode = (row['Existing Oracle Code'] || '').trim();
-        const description = (row['Description'] || '').trim();
-        const project = (row['Project'] || '').trim();
-        const unspscCode = (row['UNSPSC Code'] || '').trim();
-        const uom = (row['UOM'] || '').trim();
+        const title = toStr(row['Title']);
+        const classification = toStr(row['Classification (Item/Service)']);
+        const materialSubType = toStr(row['Material Sub-Type']);
+        const requestType = toStr(row['Request Type (New/Amendment)']) || 'New';
+        const existingCode = toStr(row['Existing Oracle Code']);
+        const description = toStr(row['Description']);
+        const project = toStr(row['Project']);
+        const unspscCode = toStr(row['UNSPSC Code']);
+        const uom = toStr(row['UOM']);
 
         const VALID_MATERIAL_SUB_TYPES = ['Direct (Nonstock)', 'Inventory (Stock)', 'Spare Parts'];
         const VALID_REQUEST_TYPES = ['New', 'Amendment'];
