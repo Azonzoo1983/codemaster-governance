@@ -22,3 +22,12 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Temp Excel lock files
+~$*.xlsx
+
+# Misc temp files
+*.xlsx
+*.py
+pages/_transform.js
+components/.claude/
