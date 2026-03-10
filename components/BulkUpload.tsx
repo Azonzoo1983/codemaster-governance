@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Upload, Download, FileSpreadsheet, X, CheckCircle, AlertTriangle, Loader2 } from 'lucide-react';
 import { useRequestStore, useUserStore, useAdminStore } from '../stores';
-import { Classification, MaterialSubType, RequestStatus, RequestItem } from '../types';
+import { Classification, MaterialSubType, ServiceSubType, RequestStatus, RequestItem } from '../types';
 import * as XLSX from 'xlsx';
 
 interface BulkUploadProps {
@@ -42,7 +42,7 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ onClose }) => {
     const headers = [
       'Title',
       'Classification (Item/Service)',
-      'Material Sub-Type',
+      'Sub-Type',
       'Request Type (New/Amendment)',
       'Existing Oracle Code',
       'Description',
@@ -65,7 +65,7 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ onClose }) => {
     // Add sample rows
     ws.addRow(['Steel Pipe 6 inch', 'Item', 'Direct (Nonstock)', 'New', '', 'Carbon steel pipe 6 inch diameter', 'PROJ-001', '30151500', 'Each']);
     ws.addRow(['Bearing SKF 6205', 'Item', 'Spare Parts', 'New', '', 'Deep groove ball bearing SKF 6205', 'PROJ-001', '31171500', 'Each']);
-    ws.addRow(['Welding Service', 'Service', '', 'New', '', 'On-site welding for pipeline repair', 'PROJ-002', '', 'Lumpsum']);
+    ws.addRow(['Welding Service', 'Service', 'Maintenance', 'New', '', 'On-site welding for pipeline repair', 'PROJ-002', '', 'Lumpsum']);
 
     // Set column widths
     ws.columns.forEach((col, i) => {
@@ -82,11 +82,11 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ onClose }) => {
         formulae: ['"Item,Service"'],
       };
 
-      // Column C (3) = Material Sub-Type
+      // Column C (3) = Sub-Type (Item + Service sub-types)
       ws.getCell(row, 3).dataValidation = {
         type: 'list',
         allowBlank: true,
-        formulae: ['"Direct (Nonstock),Inventory (Stock),Spare Parts"'],
+        formulae: ['"Direct (Nonstock),Inventory (Stock),Spare Parts,General Service,Maintenance,Consulting,Logistics,Subcontracting,Software/IT,Other"'],
       };
 
       // Column D (4) = Request Type
@@ -134,7 +134,7 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ onClose }) => {
         const errors: string[] = [];
         const title = toStr(row['Title']);
         const classification = toStr(row['Classification (Item/Service)']);
-        const materialSubType = toStr(row['Material Sub-Type']);
+        const materialSubType = toStr(row['Sub-Type']) || toStr(row['Material Sub-Type']);
         const requestType = toStr(row['Request Type (New/Amendment)']) || 'New';
         const existingCode = toStr(row['Existing Oracle Code']);
         const description = toStr(row['Description']);
@@ -142,7 +142,9 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ onClose }) => {
         const unspscCode = toStr(row['UNSPSC Code']);
         const uom = toStr(row['UOM']);
 
-        const VALID_MATERIAL_SUB_TYPES = ['Direct (Nonstock)', 'Inventory (Stock)', 'Spare Parts'];
+        const VALID_ITEM_SUB_TYPES = ['Direct (Nonstock)', 'Inventory (Stock)', 'Spare Parts'];
+        const VALID_SERVICE_SUB_TYPES = ['General Service', 'Maintenance', 'Consulting', 'Logistics', 'Subcontracting', 'Software/IT', 'Other'];
+        const VALID_SUB_TYPES = [...VALID_ITEM_SUB_TYPES, ...VALID_SERVICE_SUB_TYPES];
         const VALID_REQUEST_TYPES = ['New', 'Amendment'];
         const VALID_UOMS = ['Each', 'Set', 'Box', 'Pair', 'Meter', 'mm', 'Roll', 'Sheet', 'Piece', 'kg', 'g', 'Liter', 'Gallon', 'Drum', 'Bag', 'Bundle', 'Case', 'Pack', 'Ton', 'Foot', 'Inch', 'Days', 'Hours', 'Lumpsum', 'Monthly', 'Weekly', 'Per Visit', 'Per Unit'];
 
@@ -150,8 +152,15 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ onClose }) => {
         if (!classification || !['Item', 'Service'].includes(classification)) {
           errors.push('Classification must be "Item" or "Service"');
         }
-        if (materialSubType && !VALID_MATERIAL_SUB_TYPES.includes(materialSubType)) {
-          errors.push(`Invalid Material Sub-Type: "${materialSubType}"`);
+        if (materialSubType && !VALID_SUB_TYPES.includes(materialSubType)) {
+          errors.push(`Invalid Sub-Type: "${materialSubType}"`);
+        }
+        // Cross-validate: Item sub-types can't be used with Service classification and vice versa
+        if (materialSubType && classification === 'Item' && VALID_SERVICE_SUB_TYPES.includes(materialSubType)) {
+          errors.push(`"${materialSubType}" is a Service sub-type, not valid for Item classification`);
+        }
+        if (materialSubType && classification === 'Service' && VALID_ITEM_SUB_TYPES.includes(materialSubType)) {
+          errors.push(`"${materialSubType}" is an Item sub-type, not valid for Service classification`);
         }
         if (requestType && !VALID_REQUEST_TYPES.includes(requestType)) {
           errors.push(`Invalid Request Type: "${requestType}"`);
@@ -192,8 +201,14 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ onClose }) => {
 
     let count = 0;
     for (const row of validRows) {
-      const classificationEnum = row.classification === 'Item' ? Classification.ITEM : Classification.SERVICE;
-      const matSubType = Object.values(MaterialSubType).find((v) => v === row.materialSubType);
+      const isItem = row.classification === 'Item';
+      const classificationEnum = isItem ? Classification.ITEM : Classification.SERVICE;
+      const matSubType = isItem
+        ? Object.values(MaterialSubType).find((v) => v === row.materialSubType)
+        : undefined;
+      const svcSubType = !isItem
+        ? Object.values(ServiceSubType).find((v) => v === row.materialSubType)
+        : undefined;
 
       const newReq: Omit<RequestItem, 'id' | 'createdAt' | 'updatedAt' | 'history' | 'stageTimestamps'> = {
         requesterId: currentUser.id,
@@ -208,6 +223,7 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ onClose }) => {
         requestType: row.requestType === 'Amendment' ? 'Amendment' : 'New',
         existingCode: row.existingCode || '',
         materialSubType: matSubType,
+        serviceSubType: svcSubType,
         uom: row.uom || '',
         unspscCode: row.unspscCode || '',
       };
