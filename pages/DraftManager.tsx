@@ -574,7 +574,7 @@ export const DraftManager: React.FC = () => {
                       </td>
                       <td className="px-4 py-3">
                         <button
-                          onClick={() => navigate(`/requests/${d.id}`)}
+                          onClick={() => navigate(`/requests/${d.id}/edit`)}
                           className="text-blue-600 dark:text-blue-400 hover:underline font-medium text-left"
                         >
                           {d.title}
