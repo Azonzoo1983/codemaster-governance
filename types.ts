@@ -272,4 +272,16 @@ export const MOCK_ATTRIBUTES: AttributeDefinition[] = [
   
   // Service Attributes
   { id: 'svc_details', name: 'Service Details/Specs', type: AttributeType.LONG_TEXT, mandatory: true, active: true, includeInAutoDescription: true, descriptionOrder: 1, visibleForClassification: [Classification.SERVICE] },
+  { id: 'svc_scope', name: 'Scope of Work', type: AttributeType.LONG_TEXT, mandatory: true, active: true, includeInAutoDescription: true, descriptionOrder: 2, visibleForClassification: [Classification.SERVICE] },
+  { id: 'svc_duration', name: 'Duration', type: AttributeType.TEXT, mandatory: false, active: true, includeInAutoDescription: true, descriptionOrder: 3, visibleForClassification: [Classification.SERVICE] },
+  { id: 'svc_frequency', name: 'Frequency', type: AttributeType.DROPDOWN, options: ['One-time', 'Daily', 'Weekly', 'Monthly', 'Quarterly', 'Annually', 'As Needed'], mandatory: false, active: true, includeInAutoDescription: true, descriptionOrder: 4, visibleForClassification: [Classification.SERVICE] },
+  { id: 'svc_qualifications', name: 'Qualifications / Certifications Required', type: AttributeType.TEXT, mandatory: false, active: true, includeInAutoDescription: true, descriptionOrder: 5, visibleForClassification: [Classification.SERVICE] },
+  { id: 'svc_deliverables', name: 'Deliverables', type: AttributeType.LONG_TEXT, mandatory: false, active: true, includeInAutoDescription: true, descriptionOrder: 6, visibleForClassification: [Classification.SERVICE] },
+
+  // Shared Attributes (both Item & Service)
+  { id: 'shared_brand', name: 'Brand/Manufacturer (Shared)', type: AttributeType.TEXT, mandatory: false, active: true, includeInAutoDescription: true, descriptionOrder: 20, visibleForClassification: [Classification.ITEM, Classification.SERVICE] },
+  { id: 'shared_certs', name: 'Certifications (Shared)', type: AttributeType.MULTI_SELECT, options: ['ISO Certificate', 'ASME Certificate', 'SDS', 'TDS', 'Other'], mandatory: false, active: true, includeInAutoDescription: false, descriptionOrder: 99, visibleForClassification: [Classification.ITEM, Classification.SERVICE] },
+  { id: 'shared_standards', name: 'Compliance Standards (Shared)', type: AttributeType.TEXT, mandatory: false, active: true, includeInAutoDescription: true, descriptionOrder: 21, visibleForClassification: [Classification.ITEM, Classification.SERVICE] },
+  { id: 'shared_warranty', name: 'Warranty Details (Shared)', type: AttributeType.TEXT, mandatory: false, active: true, includeInAutoDescription: false, descriptionOrder: 99, visibleForClassification: [Classification.ITEM, Classification.SERVICE] },
+  { id: 'shared_conditions', name: 'Operating Conditions (Shared)', type: AttributeType.TEXT, mandatory: false, active: true, includeInAutoDescription: true, descriptionOrder: 22, visibleForClassification: [Classification.ITEM, Classification.SERVICE] },
 ];

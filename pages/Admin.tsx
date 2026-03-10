@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useAdminStore, useUserStore, useInviteStore, useToastStore, useBrandStore } from '../stores';
-import { AttributeDefinition, AttributeType, Priority, Role, Brand } from '../types';
+import { AttributeDefinition, AttributeType, Priority, Role, Brand, Classification } from '../types';
 import { Trash2, Plus, Edit, Link, Copy, Users, Mail, Shield, Clock, CheckCircle, XCircle, Send, Check, X, Pencil } from 'lucide-react';
 import { EmailNotificationSettings } from '../components/EmailNotificationSettings';
 
@@ -32,6 +32,7 @@ export const Admin: React.FC = () => {
   const [newBrandName, setNewBrandName] = useState('');
   const [editingBrandId, setEditingBrandId] = useState<string | null>(null);
   const [editingBrandName, setEditingBrandName] = useState('');
+  const [classificationFilter, setClassificationFilter] = useState<'all' | 'Item' | 'Service'>('all');
 
   // User editing & delete state
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
@@ -204,7 +205,7 @@ export const Admin: React.FC = () => {
   }), [inviteTokens]);
 
   const tabs = [
-    { key: 'attributes' as const, label: 'Item Attributes' },
+    { key: 'attributes' as const, label: 'Attributes' },
     { key: 'priorities' as const, label: 'Priorities' },
     { key: 'users' as const, label: 'User Management' },
     { key: 'invites' as const, label: 'Invitations' },
@@ -258,7 +259,22 @@ export const Admin: React.FC = () => {
       {/* --- ATTRIBUTES TAB --- */}
       {activeTab === 'attributes' && (
         <div role="tabpanel" id="tabpanel-attributes" aria-labelledby="tab-attributes" tabIndex={0} className="space-y-4">
-          <div className="flex justify-end">
+          <div className="flex items-center justify-between">
+            <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
+              {(['all', 'Item', 'Service'] as const).map(filter => (
+                <button
+                  key={filter}
+                  onClick={() => setClassificationFilter(filter)}
+                  className={`px-3 py-1.5 text-sm font-medium rounded-md transition ${
+                    classificationFilter === filter
+                      ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm'
+                      : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                  }`}
+                >
+                  {filter === 'all' ? 'All' : filter}
+                </button>
+              ))}
+            </div>
             <button
               onClick={() => setEditingAttr({})}
               className="btn-primary text-white px-4 py-2 rounded-lg flex items-center gap-2 transition"
@@ -294,6 +310,44 @@ export const Admin: React.FC = () => {
                   <input type="checkbox" className="rounded text-blue-600 focus:ring-blue-500/20" checked={editingAttr.includeInAutoDescription || false} onChange={e => setEditingAttr({ ...editingAttr, includeInAutoDescription: e.target.checked })} />
                   Use in Auto Description
                 </label>
+              </div>
+              <div className="flex flex-wrap gap-4 items-center">
+                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Show for:</span>
+                <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                  <input
+                    type="checkbox"
+                    className="rounded text-blue-600 focus:ring-blue-500/20"
+                    checked={!editingAttr.visibleForClassification || editingAttr.visibleForClassification.includes(Classification.ITEM)}
+                    onChange={e => {
+                      const current = editingAttr.visibleForClassification || [Classification.ITEM, Classification.SERVICE];
+                      const next = e.target.checked
+                        ? [...new Set([...current, Classification.ITEM])]
+                        : current.filter(c => c !== Classification.ITEM);
+                      if (next.length === 0) return; // at least one must be checked
+                      setEditingAttr({ ...editingAttr, visibleForClassification: next });
+                    }}
+                  />
+                  Items
+                </label>
+                <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                  <input
+                    type="checkbox"
+                    className="rounded text-blue-600 focus:ring-blue-500/20"
+                    checked={!editingAttr.visibleForClassification || editingAttr.visibleForClassification.includes(Classification.SERVICE)}
+                    onChange={e => {
+                      const current = editingAttr.visibleForClassification || [Classification.ITEM, Classification.SERVICE];
+                      const next = e.target.checked
+                        ? [...new Set([...current, Classification.SERVICE])]
+                        : current.filter(c => c !== Classification.SERVICE);
+                      if (next.length === 0) return; // at least one must be checked
+                      setEditingAttr({ ...editingAttr, visibleForClassification: next });
+                    }}
+                  />
+                  Services
+                </label>
+                <span className="text-xs text-slate-400">(at least one required)</span>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
                 <input
                   type="number"
                   placeholder="Order"
@@ -342,17 +396,37 @@ export const Admin: React.FC = () => {
                   <th scope="col" className="p-3 text-xs uppercase tracking-wider">Order</th>
                   <th scope="col" className="p-3 text-xs uppercase tracking-wider">Name</th>
                   <th scope="col" className="p-3 text-xs uppercase tracking-wider">Type</th>
+                  <th scope="col" className="p-3 text-xs uppercase tracking-wider">Visible For</th>
                   <th scope="col" className="p-3 text-xs uppercase tracking-wider">Mandatory</th>
                   <th scope="col" className="p-3 text-xs uppercase tracking-wider">In Desc.</th>
                   <th scope="col" className="p-3 text-xs uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                {[...attributes].sort((a, b) => a.descriptionOrder - b.descriptionOrder).map(attr => (
+                {[...attributes]
+                  .filter(attr => {
+                    if (classificationFilter === 'all') return true;
+                    const vis = attr.visibleForClassification;
+                    if (!vis) return true; // undefined = both
+                    return vis.includes(classificationFilter as Classification);
+                  })
+                  .sort((a, b) => a.descriptionOrder - b.descriptionOrder).map(attr => {
+                  const vis = attr.visibleForClassification;
+                  const isItem = !vis || vis.includes(Classification.ITEM);
+                  const isService = !vis || vis.includes(Classification.SERVICE);
+                  const visLabel = isItem && isService ? 'Both' : isItem ? 'Item' : 'Service';
+                  return (
                   <tr key={attr.id} className="table-row-hover">
                     <td className="p-3 font-mono text-slate-600 dark:text-slate-400">{attr.descriptionOrder}</td>
                     <td className="p-3 font-medium text-slate-900 dark:text-slate-100">{attr.name}</td>
                     <td className="p-3 text-slate-600 dark:text-slate-400">{attr.type}</td>
+                    <td className="p-3">
+                      <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${
+                        visLabel === 'Both' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300' :
+                        visLabel === 'Item' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' :
+                        'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+                      }`}>{visLabel}</span>
+                    </td>
                     <td className="p-3 text-center">{attr.mandatory ? <span className="text-emerald-600 font-medium">Yes</span> : <span className="text-slate-400">-</span>}</td>
                     <td className="p-3 text-center">{attr.includeInAutoDescription ? <span className="text-emerald-600 font-medium">Yes</span> : <span className="text-slate-400">-</span>}</td>
                     <td className="p-3 flex gap-2">
@@ -367,7 +441,8 @@ export const Admin: React.FC = () => {
                       </button>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
