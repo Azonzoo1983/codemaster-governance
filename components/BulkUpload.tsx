@@ -16,8 +16,6 @@ interface ParsedRow {
   project: string;
   unspscCode?: string;
   uom?: string;
-  existingCode?: string;
-  requestType: string;
   errors: string[];
 }
 
@@ -38,13 +36,11 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ onClose }) => {
     const wb = new ExcelJS.default.Workbook();
     const ws = wb.addWorksheet('Bulk Upload Template');
 
-    // Define headers
+    // Define headers (New items only — amendments use the single request form)
     const headers = [
       'Title',
       'Classification (Item/Service)',
       'Sub-Type',
-      'Request Type (New/Amendment)',
-      'Existing Oracle Code',
       'Description',
       'Project',
       'UNSPSC Code',
@@ -63,9 +59,9 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ onClose }) => {
     });
 
     // Add sample rows
-    ws.addRow(['Steel Pipe 6 inch', 'Item', 'Direct (Nonstock)', 'New', '', 'Carbon steel pipe 6 inch diameter', 'PROJ-001', '30151500', 'Each']);
-    ws.addRow(['Bearing SKF 6205', 'Item', 'Spare Parts', 'New', '', 'Deep groove ball bearing SKF 6205', 'PROJ-001', '31171500', 'Each']);
-    ws.addRow(['Welding Service', 'Service', 'Maintenance', 'New', '', 'On-site welding for pipeline repair', 'PROJ-002', '', 'Lumpsum']);
+    ws.addRow(['Steel Pipe 6 inch', 'Item', 'Direct (Nonstock)', 'Carbon steel pipe 6 inch diameter', 'PROJ-001', '30151500', 'Each']);
+    ws.addRow(['Bearing SKF 6205', 'Item', 'Spare Parts', 'Deep groove ball bearing SKF 6205', 'PROJ-001', '31171500', 'Each']);
+    ws.addRow(['Welding Service', 'Service', 'Maintenance', 'On-site welding for pipeline repair', 'PROJ-002', '', 'Lumpsum']);
 
     // Set column widths
     ws.columns.forEach((col, i) => {
@@ -89,15 +85,8 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ onClose }) => {
         formulae: ['"Direct (Nonstock),Inventory (Stock),Spare Parts,General Service,Maintenance,Consulting,Logistics,Subcontracting,Software/IT,Other"'],
       };
 
-      // Column D (4) = Request Type
-      ws.getCell(row, 4).dataValidation = {
-        type: 'list',
-        allowBlank: true,
-        formulae: ['"New,Amendment"'],
-      };
-
-      // Column I (9) = UOM
-      ws.getCell(row, 9).dataValidation = {
+      // Column G (7) = UOM
+      ws.getCell(row, 7).dataValidation = {
         type: 'list',
         allowBlank: true,
         formulae: ['"Each,Set,Box,Pair,Meter,mm,Roll,Sheet,Piece,kg,g,Liter,Gallon,Drum,Bag,Bundle,Case,Pack,Ton,Foot,Inch,Days,Hours,Lumpsum,Monthly,Weekly,Per Visit,Per Unit"'],
@@ -135,8 +124,6 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ onClose }) => {
         const title = toStr(row['Title']);
         const classification = toStr(row['Classification (Item/Service)']);
         const materialSubType = toStr(row['Sub-Type']) || toStr(row['Material Sub-Type']);
-        const requestType = toStr(row['Request Type (New/Amendment)']) || 'New';
-        const existingCode = toStr(row['Existing Oracle Code']);
         const description = toStr(row['Description']);
         const project = toStr(row['Project']);
         const unspscCode = toStr(row['UNSPSC Code']);
@@ -145,7 +132,6 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ onClose }) => {
         const VALID_ITEM_SUB_TYPES = ['Direct (Nonstock)', 'Inventory (Stock)', 'Spare Parts'];
         const VALID_SERVICE_SUB_TYPES = ['General Service', 'Maintenance', 'Consulting', 'Logistics', 'Subcontracting', 'Software/IT', 'Other'];
         const VALID_SUB_TYPES = [...VALID_ITEM_SUB_TYPES, ...VALID_SERVICE_SUB_TYPES];
-        const VALID_REQUEST_TYPES = ['New', 'Amendment'];
         const VALID_UOMS = ['Each', 'Set', 'Box', 'Pair', 'Meter', 'mm', 'Roll', 'Sheet', 'Piece', 'kg', 'g', 'Liter', 'Gallon', 'Drum', 'Bag', 'Bundle', 'Case', 'Pack', 'Ton', 'Foot', 'Inch', 'Days', 'Hours', 'Lumpsum', 'Monthly', 'Weekly', 'Per Visit', 'Per Unit'];
 
         if (!title) errors.push('Title is required');
@@ -162,16 +148,10 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ onClose }) => {
         if (materialSubType && classification === 'Service' && VALID_ITEM_SUB_TYPES.includes(materialSubType)) {
           errors.push(`"${materialSubType}" is an Item sub-type, not valid for Service classification`);
         }
-        if (requestType && !VALID_REQUEST_TYPES.includes(requestType)) {
-          errors.push(`Invalid Request Type: "${requestType}"`);
-        }
         if (uom && !VALID_UOMS.includes(uom)) {
           errors.push(`Invalid UOM: "${uom}"`);
         }
         if (!project) errors.push('Project is required');
-        if (requestType === 'Amendment' && !existingCode) {
-          errors.push('Existing Oracle Code required for amendments');
-        }
 
         return {
           title,
@@ -181,8 +161,6 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ onClose }) => {
           project,
           unspscCode,
           uom,
-          existingCode,
-          requestType,
           errors,
         };
       });
@@ -220,8 +198,7 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ onClose }) => {
         status: RequestStatus.DRAFT,
         attributes: {},
         generatedDescription: row.description,
-        requestType: row.requestType === 'Amendment' ? 'Amendment' : 'New',
-        existingCode: row.existingCode || '',
+        requestType: 'New',
         materialSubType: matSubType,
         serviceSubType: svcSubType,
         uom: row.uom || '',
@@ -279,7 +256,8 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ onClose }) => {
                   <Download size={16} /> Step 1: Download Template
                 </h3>
                 <p className="text-sm text-blue-700 dark:text-blue-400 mb-3">
-                  Download the Excel template, fill it with your item/service coding requests, then upload it below.
+                  Download the Excel template, fill it with your <strong>new</strong> item/service coding requests, then upload it below.
+                  For amendments to existing codes, use the single request form.
                 </p>
                 <button onClick={downloadTemplate} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition flex items-center gap-2">
                   <Download size={14} /> Download Template
