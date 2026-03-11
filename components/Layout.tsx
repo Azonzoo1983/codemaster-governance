@@ -18,25 +18,21 @@ import {
   Menu,
   X,
   BarChart2,
-  Activity,
   Keyboard,
   Sun,
   Moon,
   Monitor,
-  GitBranch,
-  FileText,
+  BookOpen,
   Search,
   Inbox,
 } from 'lucide-react';
 
 const menuItems = [
   { path: '/', label: 'Dashboard', icon: <LayoutDashboard size={20} strokeWidth={1.75} />, roles: Object.values(Role) },
-  { path: '/my-requests', label: 'My Requests', icon: <FileText size={20} strokeWidth={1.75} />, roles: [Role.REQUESTER] },
+  { path: '/code-catalog', label: 'Code Catalog', icon: <BookOpen size={20} strokeWidth={1.75} />, roles: Object.values(Role) },
   { path: '/drafts', label: 'My Drafts', icon: <Inbox size={20} strokeWidth={1.75} />, roles: [Role.REQUESTER, Role.ADMIN] },
   { path: '/requests/new', label: 'New Request', icon: <PlusCircle size={20} strokeWidth={1.75} />, roles: [Role.REQUESTER, Role.ADMIN] },
-  { path: '/reports', label: 'Reports', icon: <BarChart2 size={20} strokeWidth={1.75} />, roles: [Role.ADMIN, Role.MANAGER, Role.POC, Role.SPECIALIST, Role.TECHNICAL_REVIEWER] },
-  { path: '/activity', label: 'Activity Feed', icon: <Activity size={20} strokeWidth={1.75} />, roles: Object.values(Role) },
-  { path: '/workflow', label: 'Workflow Builder', icon: <GitBranch size={20} strokeWidth={1.75} />, roles: [Role.ADMIN] },
+  { path: '/reports', label: 'Reports', icon: <BarChart2 size={20} strokeWidth={1.75} />, roles: Object.values(Role) },
   { path: '/admin', label: 'Admin Panel', icon: <Settings size={20} strokeWidth={1.75} />, roles: [Role.ADMIN] },
 ];
 

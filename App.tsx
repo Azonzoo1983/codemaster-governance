@@ -13,10 +13,8 @@ const NewRequest = React.lazy(() => import('./pages/NewRequest').then(m => ({ de
 const RequestDetail = React.lazy(() => import('./pages/RequestDetail').then(m => ({ default: m.RequestDetail })));
 const Admin = React.lazy(() => import('./pages/Admin').then(m => ({ default: m.Admin })));
 const Reports = React.lazy(() => import('./pages/Reports').then(m => ({ default: m.Reports })));
-const ActivityFeed = React.lazy(() => import('./pages/ActivityFeed').then(m => ({ default: m.ActivityFeed })));
-const WorkflowBuilder = React.lazy(() => import('./pages/WorkflowBuilder').then(m => ({ default: m.WorkflowBuilder })));
-const MyRequests = React.lazy(() => import('./pages/MyRequests').then(m => ({ default: m.MyRequests })));
 const DraftManager = React.lazy(() => import('./pages/DraftManager').then(m => ({ default: m.DraftManager })));
+const CodeCatalog = React.lazy(() => import('./pages/CodeCatalog'));
 const Register = React.lazy(() => import('./pages/Register').then(m => ({ default: m.Register })));
 
 const LoadingScreen: React.FC = () => (
@@ -62,15 +60,13 @@ const AppRoutes: React.FC = () => {
         <Route path="/register" element={<Register />} />
         <Route element={<Layout />}>
           <Route path="/" element={<PageTransition><Dashboard /></PageTransition>} />
-          <Route path="/my-requests" element={<PageTransition><MyRequests /></PageTransition>} />
+          <Route path="/code-catalog" element={<PageTransition><CodeCatalog /></PageTransition>} />
           <Route path="/drafts" element={<PageTransition><DraftManager /></PageTransition>} />
           <Route path="/requests/new" element={<PageTransition><NewRequest /></PageTransition>} />
           <Route path="/requests/:id/edit" element={<PageTransition><NewRequest /></PageTransition>} />
           <Route path="/requests/:id" element={<PageTransition><RequestDetail /></PageTransition>} />
           <Route path="/admin" element={<PageTransition><AdminGuard><Admin /></AdminGuard></PageTransition>} />
           <Route path="/reports" element={<PageTransition><Reports /></PageTransition>} />
-          <Route path="/activity" element={<PageTransition><ActivityFeed /></PageTransition>} />
-          <Route path="/workflow" element={<PageTransition><WorkflowBuilder /></PageTransition>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
