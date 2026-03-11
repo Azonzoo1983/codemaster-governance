@@ -14,7 +14,7 @@ const RequestDetail = React.lazy(() => import('./pages/RequestDetail').then(m =>
 const Admin = React.lazy(() => import('./pages/Admin').then(m => ({ default: m.Admin })));
 const Reports = React.lazy(() => import('./pages/Reports').then(m => ({ default: m.Reports })));
 const DraftManager = React.lazy(() => import('./pages/DraftManager').then(m => ({ default: m.DraftManager })));
-const CodeCatalog = React.lazy(() => import('./pages/CodeCatalog'));
+const CodeCatalog = React.lazy(() => import('./pages/CodeCatalog').then(m => ({ default: m.CodeCatalog })));
 const Register = React.lazy(() => import('./pages/Register').then(m => ({ default: m.Register })));
 
 const LoadingScreen: React.FC = () => (
