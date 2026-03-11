@@ -20,6 +20,7 @@ const Register = React.lazy(() => import('./pages/Register').then(m => ({ defaul
 const LoadingScreen: React.FC = () => (
   <div className="h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center transition-colors">
     <div className="text-center animate-fadeIn">
+      <img src="/nass-logo.png" alt="Nass Corporation" className="h-16 w-auto mx-auto mb-6" />
       <div className="w-14 h-14 relative mx-auto mb-6">
         <div className="absolute inset-0 rounded-full border-[3px] border-slate-200 dark:border-slate-700"></div>
         <div className="absolute inset-0 rounded-full border-[3px] border-transparent border-t-blue-600 animate-spin"></div>

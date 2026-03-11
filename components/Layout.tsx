@@ -75,7 +75,10 @@ export const Layout: React.FC = () => {
 
       {/* Mobile Header */}
       <div className="md:hidden bg-slate-900 text-white p-4 flex justify-between items-center shadow-lg" role="banner">
-        <div className="font-bold text-lg tracking-tight">CodeMaster</div>
+        <div className="flex items-center gap-2.5">
+          <img src="/nass-logo.png" alt="Nass Corporation" className="h-8 w-auto brightness-0 invert" />
+          <span className="font-bold text-lg tracking-tight">CodeMaster</span>
+        </div>
         <button
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
           aria-label={isMobileMenuOpen ? 'Close menu' : 'Open menu'}
@@ -103,6 +106,7 @@ export const Layout: React.FC = () => {
         ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
       `}>
         <div className="p-6 border-b border-slate-700/50">
+          <img src="/nass-logo.png" alt="Nass Corporation" className="h-12 w-auto mx-auto mb-3 brightness-0 invert opacity-80" />
           <h1 className="text-2xl font-bold tracking-tight text-white">CodeMaster</h1>
           <p className="text-slate-400 text-[10px] mt-1 uppercase tracking-widest font-medium">Governance Tool</p>
         </div>
