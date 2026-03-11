@@ -183,20 +183,45 @@ export const Reports: React.FC = () => {
     return Object.entries(counts).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
   }, [requests, users]);
 
-  // Requests Trend (30 days)
+  // Requests Trend — adapts to date filter or defaults to last 30 days
+  const trendLabel = useMemo(() => {
+    if (dateFrom || dateTo) return 'Filtered Period';
+    return 'Last 30 Days';
+  }, [dateFrom, dateTo]);
+
   const trendData = useMemo(() => {
-    const days = 30;
-    const now = new Date();
+    const end = dateTo ? new Date(dateTo + 'T23:59:59') : new Date();
+    const start = dateFrom ? new Date(dateFrom) : (() => { const d = new Date(end); d.setDate(d.getDate() - 29); return d; })();
+    const startDay = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+    const endDay = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+    const diffDays = Math.round((endDay.getTime() - startDay.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+
+    // If range > 90 days, aggregate by month instead of by day
+    if (diffDays > 90) {
+      const buckets: Record<string, number> = {};
+      requests.forEach(r => {
+        const d = new Date(r.createdAt);
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        buckets[key] = (buckets[key] || 0) + 1;
+      });
+      return Object.keys(buckets).sort().map(key => {
+        const [y, m] = key.split('-');
+        const label = new Date(Number(y), Number(m) - 1).toLocaleDateString('en', { month: 'short', year: '2-digit' });
+        return { date: label, count: buckets[key] };
+      });
+    }
+
+    // Day-by-day
     const data: { date: string; count: number }[] = [];
-    for (let i = days - 1; i >= 0; i--) {
-      const date = new Date(now);
-      date.setDate(date.getDate() - i);
+    for (let i = 0; i < diffDays; i++) {
+      const date = new Date(startDay);
+      date.setDate(date.getDate() + i);
       const dateStr = date.toISOString().slice(0, 10);
       const count = requests.filter(r => r.createdAt.slice(0, 10) === dateStr).length;
       data.push({ date: date.toLocaleDateString('en', { month: 'short', day: 'numeric' }), count });
     }
     return data;
-  }, [requests]);
+  }, [requests, dateFrom, dateTo]);
 
   // Specialist Workload
   const workloadData = useMemo(() => {
@@ -354,10 +379,10 @@ export const Reports: React.FC = () => {
         </div>
       </div>
 
-      {/* Requests Trend (30 Days) */}
+      {/* Requests Trend */}
       <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-premium border border-slate-200/60 dark:border-slate-700/60">
         <h3 className="font-bold text-slate-800 dark:text-slate-100 mb-4 flex items-center gap-2">
-          <TrendingUp size={18} /> Requests Trend (30 Days)
+          <TrendingUp size={18} /> Requests Trend ({trendLabel})
         </h3>
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
