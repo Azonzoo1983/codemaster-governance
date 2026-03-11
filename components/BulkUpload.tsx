@@ -234,7 +234,7 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ onClose }) => {
     a.href = url;
     a.download = 'CodeMaster_Bulk_Upload_Template.xlsx';
     a.click();
-    URL.revokeObjectURL(url);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
   // ──── File Parser (multi-sheet with attributes) ────
@@ -435,7 +435,7 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ onClose }) => {
 
 
     setUploading(true);
-    const normalPriority = priorities.find((p) => p.name === 'Normal') || priorities[0];
+    const normalPriority = priorities.find((p) => p.name === 'Normal') || priorities[0] || { id: 'p1' };
 
     let count = 0;
     for (const row of validRows) {

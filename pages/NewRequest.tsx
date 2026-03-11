@@ -257,7 +257,13 @@ export const NewRequest: React.FC = () => {
         relevantAttributes.filter(a => a.mandatory).forEach(a => {
           const val = formData.attributes?.[a.id];
           if (a.type === AttributeType.DIMENSION_BLOCK) {
-            // Dimensions are optional per user feedback - skip mandatory validation
+            // At least one dimension field must have a value (aligned with bulkUploadHelpers)
+            const dimVal = val as Record<string, string | number> | undefined;
+            if (!dimVal || !Object.entries(dimVal).some(
+              ([k, v]) => k !== '_unit' && String(v || '').trim() !== ''
+            )) {
+              errors.push(`${a.name} is required (at least one dimension).`);
+            }
             return;
           } else if (a.type === AttributeType.NUMERIC_UNIT) {
             const numVal = val as Record<string, string | number> | undefined;
@@ -871,25 +877,7 @@ export const NewRequest: React.FC = () => {
               </div>
             </div>
 
-            {/* Brand/Manufacturer from master list */}
-            {formData.classification === Classification.ITEM && brands.length > 0 && (
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                  Brand/Manufacturer (Master List)
-                  <HelpTooltip text="Select from the centralized brand master list managed by admin" />
-                </label>
-                <select
-                  className="w-full rounded-lg border-slate-300 dark:border-slate-600 shadow-sm border p-2.5 focus:border-blue-500 focus:ring-blue-500/20 transition bg-white dark:bg-slate-700 dark:text-slate-200"
-                  value={(formData.attributes?.brand as string) || ''}
-                  onChange={(e) => setFormData({ ...formData, attributes: { ...formData.attributes, brand: e.target.value } })}
-                >
-                  <option value="">Select brand...</option>
-                  {brands.filter(b => b.active).map(b => (
-                    <option key={b.id} value={b.name}>{b.name}</option>
-                  ))}
-                </select>
-              </div>
-            )}
+            {/* Brand/Manufacturer — handled by DynamicForm ComboBoxInput via suggestions prop */}
 
             {/* Core Fields */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">

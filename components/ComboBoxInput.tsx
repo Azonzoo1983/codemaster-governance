@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useId, useMemo } from 'react';
 
 interface ComboBoxInputProps {
   id?: string;
@@ -25,6 +25,10 @@ export const ComboBoxInput: React.FC<ComboBoxInputProps> = ({
   className = '',
   'aria-required': ariaRequired,
 }) => {
+  const fallbackId = useId();
+  const resolvedId = id || fallbackId;
+  const listboxId = `${resolvedId}-listbox`;
+
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [highlightIdx, setHighlightIdx] = useState(-1);
@@ -32,10 +36,20 @@ export const ComboBoxInput: React.FC<ComboBoxInputProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
 
-  // Filter suggestions based on current query
-  const filtered = suggestions.filter((s) =>
-    s.toLowerCase().includes((query || value || '').toLowerCase())
-  );
+  // Deduplicate and filter suggestions based on current query
+  const filtered = useMemo(() => {
+    const search = (query || value || '').toLowerCase();
+    const seen = new Set<string>();
+    const result: string[] = [];
+    for (const s of suggestions) {
+      const lower = s.toLowerCase();
+      if (!seen.has(lower) && lower.includes(search)) {
+        seen.add(lower);
+        result.push(s);
+      }
+    }
+    return result;
+  }, [suggestions, query, value]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -115,11 +129,14 @@ export const ComboBoxInput: React.FC<ComboBoxInputProps> = ({
     setQuery('');
   };
 
+  /** Stable option ID for aria-activedescendant */
+  const optionId = (idx: number) => `${listboxId}-opt-${idx}`;
+
   return (
     <div ref={wrapperRef} className="relative">
       <input
         ref={inputRef}
-        id={id}
+        id={resolvedId}
         type="text"
         value={value}
         onChange={handleInputChange}
@@ -130,7 +147,8 @@ export const ComboBoxInput: React.FC<ComboBoxInputProps> = ({
         aria-required={ariaRequired}
         aria-expanded={open}
         aria-autocomplete="list"
-        aria-controls={id ? `${id}-listbox` : undefined}
+        aria-controls={listboxId}
+        aria-activedescendant={open && highlightIdx >= 0 ? optionId(highlightIdx) : undefined}
         role="combobox"
         autoComplete="off"
         className={className}
@@ -139,7 +157,7 @@ export const ComboBoxInput: React.FC<ComboBoxInputProps> = ({
       {open && filtered.length > 0 && !disabled && (
         <ul
           ref={listRef}
-          id={id ? `${id}-listbox` : undefined}
+          id={listboxId}
           role="listbox"
           className="absolute z-50 left-0 right-0 mt-1 max-h-48 overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 shadow-lg py-1"
         >
@@ -148,7 +166,8 @@ export const ComboBoxInput: React.FC<ComboBoxInputProps> = ({
             const isExact = item.toLowerCase() === (value || '').toLowerCase();
             return (
               <li
-                key={item}
+                key={`${item}-${idx}`}
+                id={optionId(idx)}
                 role="option"
                 aria-selected={isHighlighted}
                 onMouseDown={(e) => {
