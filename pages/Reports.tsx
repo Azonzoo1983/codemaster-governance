@@ -229,18 +229,22 @@ export const Reports: React.FC = () => {
 
     const byReason: Record<string, number> = {};
     rejected.forEach(r => {
-      const reason = r.rejectionReason?.slice(0, 50) || 'No reason given';
+      const reason = r.rejectionReason || 'No reason given';
       byReason[reason] = (byReason[reason] || 0) + 1;
     });
-    const reasons = Object.entries(byReason).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
+    const reasons = Object.entries(byReason).map(([name, value]) => ({ name: name.length > 50 ? name.slice(0, 47) + '...' : name, value })).sort((a, b) => b.value - a.value);
 
     const trend: Record<string, number> = {};
     rejected.forEach(r => {
       const d = new Date(r.createdAt);
-      const key = d.toLocaleDateString('en', { month: 'short', year: '2-digit' });
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
       trend[key] = (trend[key] || 0) + 1;
     });
-    const trendArr = Object.entries(trend).map(([month, count]) => ({ month, count }));
+    const trendArr = Object.keys(trend).sort().map(key => {
+      const [y, m] = key.split('-');
+      const label = new Date(Number(y), Number(m) - 1).toLocaleDateString('en', { month: 'short', year: '2-digit' });
+      return { month: label, count: trend[key] };
+    });
 
     return { byDepartment, byRequester, reasons, trend: trendArr, total: rejected.length };
   }, [requests, users]);
