@@ -33,6 +33,7 @@ export const NewRequest: React.FC = () => {
   const [step, setStep] = useState(1);
   const [dbChecked, setDbChecked] = useState(false);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [submitting, setSubmitting] = useState(false);
 
   const [showDraftBanner, setShowDraftBanner] = useState(false);
   const [autoSaveIndicator, setAutoSaveIndicator] = useState(false);
@@ -317,6 +318,7 @@ export const NewRequest: React.FC = () => {
   };
 
   const handleSubmit = () => {
+    if (submitting) return;
     const allErrors = isAmendment
       ? [...validateStep(1), ...validateStep(2), ...validateStep(4)]
       : [...validateStep(1), ...validateStep(2), ...validateStep(3), ...validateStep(4)];
@@ -383,6 +385,7 @@ export const NewRequest: React.FC = () => {
         attachments: formData.attachments || []
       };
 
+      setSubmitting(true);
       addRequest(newRequestPayload);
     }
 
@@ -1193,7 +1196,7 @@ export const NewRequest: React.FC = () => {
               </button>
               <button
                 onClick={handleSubmit}
-                disabled={!formData.priorityId}
+                disabled={!formData.priorityId || submitting}
                 className="btn-success text-white px-8 py-3 rounded-lg flex items-center gap-2 transition disabled:bg-slate-300 dark:disabled:bg-slate-600 disabled:cursor-not-allowed font-medium"
                 aria-label={requestId ? 'Resubmit request' : 'Submit request'}
               >

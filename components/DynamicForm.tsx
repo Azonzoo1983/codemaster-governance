@@ -26,7 +26,7 @@ function isEmpty(val: any, type: AttributeType): boolean {
   if (typeof val === 'object') {
     // DIMENSION_BLOCK or NUMERIC_UNIT
     if (type === AttributeType.NUMERIC_UNIT) {
-      return !val.value || String(val.value).trim() === '';
+      return val.value == null || String(val.value).trim() === '';
     }
     // DIMENSION_BLOCK — at least one dimension must be filled
     return !Object.entries(val).some(

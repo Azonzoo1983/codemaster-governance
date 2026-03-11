@@ -36,20 +36,20 @@ export const ComboBoxInput: React.FC<ComboBoxInputProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
 
-  // Deduplicate and filter suggestions based on current query
+  // Deduplicate and filter suggestions — empty query shows all
   const filtered = useMemo(() => {
-    const search = (query || value || '').toLowerCase();
+    const search = query.toLowerCase();
     const seen = new Set<string>();
     const result: string[] = [];
     for (const s of suggestions) {
       const lower = s.toLowerCase();
-      if (!seen.has(lower) && lower.includes(search)) {
+      if (!seen.has(lower) && (!search || lower.includes(search))) {
         seen.add(lower);
         result.push(s);
       }
     }
     return result;
-  }, [suggestions, query, value]);
+  }, [suggestions, query]);
 
   // Close dropdown when clicking outside
   useEffect(() => {

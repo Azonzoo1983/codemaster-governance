@@ -330,7 +330,7 @@ export function getMissingMandatoryAttributes(
 
       case AttributeType.NUMERIC_UNIT: {
         const obj = val as Record<string, unknown> | undefined;
-        isFilled = obj != null && String(obj.value || '').trim() !== '';
+        isFilled = obj != null && obj.value != null && String(obj.value).trim() !== '';
         break;
       }
 
