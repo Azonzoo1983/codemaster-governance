@@ -1,6 +1,7 @@
 import { create } from 'zustand';
+import { arrayMove } from '@dnd-kit/sortable';
 import { AttributeDefinition, Priority, MOCK_PRIORITIES, MOCK_ATTRIBUTES } from '../types';
-import { upsertRecord, deleteRecord, TABLES } from '../lib/supabase';
+import { upsertRecord, deleteRecord, upsertMany, TABLES } from '../lib/supabase';
 import { useToastStore } from './toastStore';
 
 interface AdminState {
@@ -19,6 +20,10 @@ interface AdminState {
   updatePriority: (prio: Priority) => void;
   addPriority: (prio: Priority) => void;
   deletePriority: (id: string) => void;
+
+  // Reorder
+  reorderAttributes: (oldIndex: number, newIndex: number) => Promise<void>;
+  reorderPriorities: (oldIndex: number, newIndex: number) => Promise<void>;
 }
 
 export const useAdminStore = create<AdminState>((set, get) => ({
@@ -109,6 +114,30 @@ export const useAdminStore = create<AdminState>((set, get) => ({
         addToast(`Failed to add priority: ${result.error}`, 'error');
       }
     });
+  },
+
+  reorderAttributes: async (oldIndex: number, newIndex: number) => {
+    const addToast = useToastStore.getState().addToast;
+    const sorted = [...get().attributes].sort((a, b) => a.descriptionOrder - b.descriptionOrder);
+    const reordered = arrayMove(sorted, oldIndex, newIndex);
+    const updated = reordered.map((attr, i) => ({ ...attr, descriptionOrder: i + 1 }));
+    set({ attributes: updated });
+    const result = await upsertMany(TABLES.attributes, updated);
+    if (!result.success) {
+      addToast(`Failed to reorder attributes: ${result.error}`, 'error');
+    }
+  },
+
+  reorderPriorities: async (oldIndex: number, newIndex: number) => {
+    const addToast = useToastStore.getState().addToast;
+    const sorted = [...get().priorities].sort((a, b) => a.displayOrder - b.displayOrder);
+    const reordered = arrayMove(sorted, oldIndex, newIndex);
+    const updated = reordered.map((p, i) => ({ ...p, displayOrder: i + 1 }));
+    set({ priorities: updated });
+    const result = await upsertMany(TABLES.priorities, updated);
+    if (!result.success) {
+      addToast(`Failed to reorder priorities: ${result.error}`, 'error');
+    }
   },
 
   deletePriority: (id) => {

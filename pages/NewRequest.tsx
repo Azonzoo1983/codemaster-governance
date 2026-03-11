@@ -8,6 +8,7 @@ import { StepRequestType } from './steps/StepRequestType';
 import { StepClassification } from './steps/StepClassification';
 import { StepDetails } from './steps/StepDetails';
 import { StepPriority } from './steps/StepPriority';
+import { findPotentialDuplicates, DuplicateMatch } from '../lib/duplicateDetection';
 
 const MAX_ATTACHMENT_SIZE = 10_000_000; // 10MB (upgraded with Supabase Storage)
 const TOTAL_STEPS = 4;
@@ -32,6 +33,7 @@ export const NewRequest: React.FC = () => {
   const [step, setStep] = useState(1);
   const [dbChecked, setDbChecked] = useState(false);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
 
   const [showDraftBanner, setShowDraftBanner] = useState(false);
@@ -176,6 +178,14 @@ export const NewRequest: React.FC = () => {
     return { brand: [...brandNames].sort((a, b) => a.localeCompare(b)) };
   }, [brands, requests]);
 
+  const projectSuggestions = useMemo(() => {
+    const projects = new Set<string>();
+    for (const req of requests) {
+      if (req.project?.trim()) projects.add(req.project.trim());
+    }
+    return Array.from(projects).sort();
+  }, [requests]);
+
   // Auto-Description Logic
   const generateDescription = useCallback((attrs: Record<string, string | number | string[] | Record<string, string | number>>) => {
     const activeAttrs = relevantAttributes
@@ -216,10 +226,33 @@ export const NewRequest: React.FC = () => {
     return '';
   }, [formData.attributes, generateDescription]);
 
+  const potentialDuplicates = useMemo(() => {
+    return findPotentialDuplicates(formData, requests, requestId);
+  }, [formData.generatedDescription, formData.unspscCode, formData.attributes, requests, requestId]);
+
   // Keep formData.generatedDescription synced
   useEffect(() => {
     setFormData(prev => ({ ...prev, generatedDescription }));
   }, [generatedDescription]);
+
+  // Keyboard shortcuts: Ctrl+S to save draft, Ctrl+Enter to submit
+  const keyboardHandlersRef = useRef<{ save: () => void; submit: () => void }>({ save: () => {}, submit: () => {} });
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      if (e.key === 's') {
+        e.preventDefault();
+        keyboardHandlersRef.current.save();
+      }
+      if (e.key === 'Enter' && step === TOTAL_STEPS) {
+        e.preventDefault();
+        keyboardHandlersRef.current.submit();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [step]);
 
   const selectedPriority = priorities.find(p => p.id === formData.priorityId);
 
@@ -288,16 +321,64 @@ export const NewRequest: React.FC = () => {
     return errors;
   };
 
+  const validateStepFields = (stepNum: number): Record<string, string> => {
+    const errors: Record<string, string> = {};
+    switch (stepNum) {
+      case 2:
+        if (formData.requestType === 'Amendment') {
+          if (!formData.existingCode?.trim()) errors.existingCode = 'Existing Oracle Code is required.';
+          if (!formData.existingDescription?.trim()) errors.existingDescription = 'Current Oracle Description is required.';
+          if (!formData.proposedDescription?.trim()) errors.proposedDescription = 'New Proposed Description is required.';
+        } else {
+          if (!dbChecked) errors.dbChecked = 'You must confirm database verification.';
+          if (formData.classification === Classification.SERVICE && !formData.serviceSubType) errors.serviceSubType = 'Service Sub-Type is required.';
+        }
+        break;
+      case 3:
+        if (!formData.project?.trim()) errors.project = 'Project Code is required.';
+        relevantAttributes.filter(a => a.mandatory).forEach(a => {
+          const val = formData.attributes?.[a.id];
+          if (a.type === AttributeType.DIMENSION_BLOCK) {
+            const dimVal = val as Record<string, string | number> | undefined;
+            if (!dimVal || !Object.entries(dimVal).some(([k, v]) => k !== '_unit' && String(v || '').trim() !== '')) {
+              errors[`attr_${a.id}`] = `${a.name} is required (at least one dimension).`;
+            }
+          } else if (a.type === AttributeType.NUMERIC_UNIT) {
+            const numVal = val as Record<string, string | number> | undefined;
+            if (!numVal?.value) errors[`attr_${a.id}`] = `${a.name} is required.`;
+          } else if (!val || (typeof val === 'string' && !val.trim())) {
+            errors[`attr_${a.id}`] = `${a.name} is required.`;
+          }
+        });
+        break;
+      case 4:
+        if (!formData.priorityId) errors.priorityId = 'Priority Level is required.';
+        if (selectedPriority?.requiresApproval) {
+          if (!formData.justification?.trim()) errors.justification = 'Justification is required for Critical priority.';
+          if (!formData.managerName?.trim()) errors.managerName = 'Approving Manager Name is required.';
+          if (!formData.managerEmail?.trim()) errors.managerEmail = 'Approving Manager Email is required.';
+          if (formData.managerEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.managerEmail)) {
+            errors.managerEmail = 'Please enter a valid email address.';
+          }
+        }
+        break;
+    }
+    return errors;
+  };
+
   const isAmendment = formData.requestType === 'Amendment';
 
   const handleNext = () => {
     const errors = validateStep(step);
+    const fields = validateStepFields(step);
     if (errors.length > 0) {
       setValidationErrors(errors);
+      setFieldErrors(fields);
       addToast(errors[0], 'warning');
       return;
     }
     setValidationErrors([]);
+    setFieldErrors({});
     // Amendments skip Step 3 (Details & Attributes) — go from Step 2 directly to Step 4
     if (isAmendment && step === 2) {
       setStep(4);
@@ -308,6 +389,7 @@ export const NewRequest: React.FC = () => {
 
   const handleBack = () => {
     setValidationErrors([]);
+    setFieldErrors({});
     // Amendments skip Step 3 — go from Step 4 back to Step 2
     if (isAmendment && step === 4) {
       setStep(2);
@@ -323,10 +405,15 @@ export const NewRequest: React.FC = () => {
       : [...validateStep(1), ...validateStep(2), ...validateStep(3), ...validateStep(4)];
     if (allErrors.length > 0) {
       setValidationErrors(allErrors);
+      const allFieldErrors = isAmendment
+        ? { ...validateStepFields(1), ...validateStepFields(2), ...validateStepFields(4) }
+        : { ...validateStepFields(1), ...validateStepFields(2), ...validateStepFields(3), ...validateStepFields(4) };
+      setFieldErrors(allFieldErrors);
       addToast(allErrors[0], 'warning');
       return;
     }
     setValidationErrors([]);
+    setFieldErrors({});
 
     const initialStatus = selectedPriority?.requiresApproval
       ? RequestStatus.PENDING_APPROVAL
@@ -401,6 +488,9 @@ export const NewRequest: React.FC = () => {
     try { localStorage.removeItem(AUTOSAVE_KEY); } catch { /* ignore */ }
     navigate('/');
   };
+
+  // Update keyboard shortcut refs (must be after handleManualSave & handleSubmit)
+  keyboardHandlersRef.current = { save: handleManualSave, submit: handleSubmit };
 
   const [uploading, setUploading] = useState(false);
 
@@ -544,6 +634,7 @@ export const NewRequest: React.FC = () => {
               onClick={() => {
                 if (canClick) {
                   setValidationErrors([]);
+                  setFieldErrors({});
                   setStep(stepNum);
                 }
               }}
@@ -593,6 +684,7 @@ export const NewRequest: React.FC = () => {
               dbChecked={dbChecked}
               setDbChecked={setDbChecked}
               addToast={addToast}
+              fieldErrors={fieldErrors}
             />
             <div className="flex justify-between pt-6 border-t border-slate-100 dark:border-slate-700">
               <button onClick={handleBack} className="text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 flex items-center gap-1 transition" aria-label="Go back to Step 1: Request Type">
@@ -614,10 +706,13 @@ export const NewRequest: React.FC = () => {
               generatedDescription={generatedDescription}
               relevantAttributes={relevantAttributes}
               attributeSuggestions={attributeSuggestions}
+              projectSuggestions={projectSuggestions}
               requestId={requestId}
               uploading={uploading}
               onFileUpload={handleFileUpload}
               onFileDrop={handleFileDrop}
+              fieldErrors={fieldErrors}
+              potentialDuplicates={potentialDuplicates}
             />
             <div className="flex justify-between pt-6 border-t border-slate-100 dark:border-slate-700">
               <button onClick={handleBack} className="text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 flex items-center gap-1 transition" aria-label="Go back to Step 2: DB Check & Classification">
@@ -636,6 +731,7 @@ export const NewRequest: React.FC = () => {
             <StepPriority
               formData={formData}
               setFormData={setFormData}
+              fieldErrors={fieldErrors}
               priorities={priorities}
               selectedPriority={selectedPriority}
               isAmendment={isAmendment}

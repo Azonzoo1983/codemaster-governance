@@ -1,10 +1,13 @@
 import React, { useRef, useState } from 'react';
-import { Eye, Paperclip, FileText, X, UploadCloud, Loader2 } from 'lucide-react';
+import { Eye, Paperclip, FileText, X, UploadCloud, Loader2, AlertTriangle } from 'lucide-react';
+import { AttachmentThumbnail } from '../../components/AttachmentThumbnail';
 import { Classification, RequestItem, AttributeDefinition } from '../../types';
 import { DynamicForm } from '../../components/DynamicForm';
+import { ComboBoxInput } from '../../components/ComboBoxInput';
 import { HelpTooltip } from '../../components/HelpTooltip';
 import { UnspscSearch } from '../../components/UnspscSearch';
 import { formatFileSize } from '../../lib/fileUpload';
+import type { DuplicateMatch } from '../../lib/duplicateDetection';
 
 const SERVICE_UOM_OPTIONS = ['Days', 'Hours', 'Lumpsum', 'Each', 'Monthly', 'Weekly', 'Per Visit', 'Per Unit'];
 const ITEM_UOM_OPTIONS = ['Each', 'Set', 'Box', 'Pair', 'Meter', 'mm', 'Roll', 'Sheet', 'Piece', 'kg', 'g', 'Liter', 'Gallon', 'Drum', 'Bag', 'Bundle', 'Case', 'Pack', 'Ton', 'Foot', 'Inch'];
@@ -15,10 +18,13 @@ interface StepDetailsProps {
   generatedDescription: string;
   relevantAttributes: AttributeDefinition[];
   attributeSuggestions: Record<string, string[]>;
+  projectSuggestions?: string[];
   requestId?: string;
   uploading: boolean;
   onFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onFileDrop: (e: React.DragEvent<HTMLDivElement>) => void;
+  potentialDuplicates?: DuplicateMatch[];
+  fieldErrors?: Record<string, string>;
 }
 
 export const StepDetails: React.FC<StepDetailsProps> = ({
@@ -27,10 +33,13 @@ export const StepDetails: React.FC<StepDetailsProps> = ({
   generatedDescription,
   relevantAttributes,
   attributeSuggestions,
+  projectSuggestions = [],
   requestId,
   uploading,
   onFileUpload,
   onFileDrop,
+  potentialDuplicates = [],
+  fieldErrors = {},
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const dragCounter = useRef(0);
@@ -75,6 +84,47 @@ export const StepDetails: React.FC<StepDetailsProps> = ({
           {generatedDescription || '(Complete attributes below to generate)'}
         </p>
       </div>
+
+      {/* Duplicate Detection Warning */}
+      {potentialDuplicates.length > 0 && (
+        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200/60 dark:border-amber-700/60 rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <AlertTriangle size={16} className="text-amber-600 dark:text-amber-400" />
+            <h4 className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+              Potential Duplicate{potentialDuplicates.length > 1 ? 's' : ''} Found
+            </h4>
+          </div>
+          <p className="text-xs text-amber-700 dark:text-amber-400 mb-3">
+            The following existing requests appear similar. Please verify this is not a duplicate before submitting.
+          </p>
+          <div className="space-y-2">
+            {potentialDuplicates.map((dup) => (
+              <div
+                key={dup.request.id}
+                className="flex items-center justify-between bg-white dark:bg-slate-800 rounded-lg p-3 border border-amber-200/40 dark:border-amber-700/40"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-mono font-medium text-amber-700 dark:text-amber-400">
+                      {dup.request.id}
+                    </span>
+                    <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400">
+                      {Math.round(dup.score * 100)}% match
+                    </span>
+                  </div>
+                  <p className="text-sm text-slate-700 dark:text-slate-300 truncate mt-0.5">
+                    {dup.request.title || dup.request.generatedDescription}
+                  </p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{dup.reason}</p>
+                </div>
+                <span className="text-xs text-slate-400 dark:text-slate-500 ml-3 whitespace-nowrap">
+                  {dup.request.status}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* UNSPSC Code */}
       <div>
@@ -133,14 +183,16 @@ export const StepDetails: React.FC<StepDetailsProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         <div>
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Project Code <span className="text-red-500">*</span></label>
-          <input
-            type="text"
-            className="w-full rounded-lg border-slate-300 dark:border-slate-600 shadow-sm border p-2.5 focus:border-blue-500 focus:ring-blue-500/20 transition bg-white dark:bg-slate-700 dark:text-slate-200 dark:placeholder-slate-400"
+          <ComboBoxInput
+            id="field-project"
             value={formData.project || ''}
-            onChange={(e) => setFormData(prev => ({ ...prev, project: e.target.value }))}
+            onChange={(val) => setFormData(prev => ({ ...prev, project: val }))}
+            suggestions={projectSuggestions}
             placeholder="e.g. PRJ-2026-001"
-            aria-required="true"
+            aria-required={true}
+            className="w-full rounded-lg border-slate-300 dark:border-slate-600 shadow-sm border p-2.5 focus:border-blue-500 focus:ring-blue-500/20 transition bg-white dark:bg-slate-700 dark:text-slate-200 dark:placeholder-slate-400"
           />
+          {fieldErrors.project && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors.project}</p>}
         </div>
 
         <div>
@@ -159,28 +211,15 @@ export const StepDetails: React.FC<StepDetailsProps> = ({
             Unit of Measurement (UOM)
             {formData.classification === Classification.SERVICE && <span className="text-red-500"> *</span>}
           </label>
-          {formData.classification === Classification.SERVICE ? (
-            <select
-              className="w-full rounded-lg border-slate-300 dark:border-slate-600 shadow-sm border p-2.5 focus:border-blue-500 focus:ring-blue-500/20 transition bg-white dark:bg-slate-700 dark:text-slate-200"
-              value={formData.uom || ''}
-              onChange={(e) => setFormData(prev => ({ ...prev, uom: e.target.value }))}
-              aria-required="true"
-              aria-label="Unit of Measurement"
-            >
-              <option value="">Select UOM...</option>
-              {SERVICE_UOM_OPTIONS.map(u => <option key={u} value={u}>{u}</option>)}
-            </select>
-          ) : (
-            <select
-              className="w-full rounded-lg border-slate-300 dark:border-slate-600 shadow-sm border p-2.5 focus:border-blue-500 focus:ring-blue-500/20 transition bg-white dark:bg-slate-700 dark:text-slate-200"
-              value={formData.uom || ''}
-              onChange={(e) => setFormData(prev => ({ ...prev, uom: e.target.value }))}
-              aria-label="Unit of Measurement"
-            >
-              <option value="">Select UOM...</option>
-              {ITEM_UOM_OPTIONS.map(u => <option key={u} value={u}>{u}</option>)}
-            </select>
-          )}
+          <ComboBoxInput
+            id="field-uom"
+            value={formData.uom || ''}
+            onChange={(val) => setFormData(prev => ({ ...prev, uom: val }))}
+            suggestions={formData.classification === Classification.SERVICE ? SERVICE_UOM_OPTIONS : ITEM_UOM_OPTIONS}
+            placeholder="Type or select UOM..."
+            aria-required={formData.classification === Classification.SERVICE || undefined}
+            className="w-full rounded-lg border-slate-300 dark:border-slate-600 shadow-sm border p-2.5 focus:border-blue-500 focus:ring-blue-500/20 transition bg-white dark:bg-slate-700 dark:text-slate-200 dark:placeholder-slate-400"
+          />
         </div>
       </div>
 
@@ -195,6 +234,7 @@ export const StepDetails: React.FC<StepDetailsProps> = ({
           onChange={(key, val) => setFormData(prev => ({ ...prev, attributes: { ...prev.attributes, [key]: val } }))}
           highlightEmpty={!!requestId}
           suggestions={attributeSuggestions}
+          fieldErrors={fieldErrors}
         />
       </div>
 
@@ -249,27 +289,16 @@ export const StepDetails: React.FC<StepDetailsProps> = ({
         </div>
 
         {formData.attachments && formData.attachments.length > 0 && (
-          <ul className="mt-3 space-y-2">
+          <div className="mt-3 space-y-2">
             {formData.attachments.map(att => (
-              <li key={att.id} className="flex items-center justify-between bg-slate-50 dark:bg-slate-700/50 p-2.5 rounded-lg border border-slate-200/60 dark:border-slate-600 text-sm">
-                <div className="flex items-center gap-2 overflow-hidden">
-                  <FileText size={14} className="text-slate-400 dark:text-slate-500 shrink-0" />
-                  <span className="truncate max-w-[200px] text-slate-700 dark:text-slate-300">{att.name}</span>
-                  <span className="text-xs text-slate-400 dark:text-slate-500">({formatFileSize(att.size)})</span>
-                </div>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setFormData(prev => ({ ...prev, attachments: prev.attachments?.filter(a => a.id !== att.id) }));
-                  }}
-                  className="text-rose-500 hover:text-rose-700 dark:text-rose-400 dark:hover:text-rose-300 p-1 transition"
-                  aria-label={`Remove attachment ${att.name}`}
-                >
-                  <X size={14} />
-                </button>
-              </li>
+              <AttachmentThumbnail
+                key={att.id}
+                attachment={att}
+                showRemove
+                onRemove={() => setFormData(prev => ({ ...prev, attachments: prev.attachments?.filter(a => a.id !== att.id) }))}
+              />
             ))}
-          </ul>
+          </div>
         )}
       </div>
     </div>

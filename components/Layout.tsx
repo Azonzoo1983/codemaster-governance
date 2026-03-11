@@ -7,6 +7,7 @@ import { KeyboardShortcutHelp } from './KeyboardShortcutHelp';
 import { NotificationBell } from './NotificationBell';
 import { GlobalSearch } from './GlobalSearch';
 import { RecentActivitySidebar } from './RecentActivitySidebar';
+import { OfflineIndicator } from './OfflineIndicator';
 import { Role } from '../types';
 import type { Theme } from '../stores';
 import {
@@ -218,6 +219,9 @@ export const Layout: React.FC = () => {
 
       {/* Keyboard Shortcuts Help Modal */}
       <KeyboardShortcutHelp isOpen={showHelp} onClose={() => setShowHelp(false)} />
+
+      {/* Offline / Sync Indicator */}
+      <OfflineIndicator />
     </div>
   );
 };

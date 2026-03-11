@@ -10,6 +10,7 @@ interface StepClassificationProps {
   dbChecked: boolean;
   setDbChecked: (val: boolean) => void;
   addToast: (msg: string, type: string) => void;
+  fieldErrors?: Record<string, string>;
 }
 
 export const StepClassification: React.FC<StepClassificationProps> = ({
@@ -19,6 +20,7 @@ export const StepClassification: React.FC<StepClassificationProps> = ({
   dbChecked,
   setDbChecked,
   addToast,
+  fieldErrors = {},
 }) => (
   <div className="space-y-6">
     {isAmendment ? (
@@ -36,6 +38,7 @@ export const StepClassification: React.FC<StepClassificationProps> = ({
             aria-required="true"
             aria-label="Existing Oracle Code"
           />
+          {fieldErrors.existingCode && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors.existingCode}</p>}
           <div className="mt-4">
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
               Current Oracle Description <span className="text-red-500">*</span>
@@ -47,6 +50,7 @@ export const StepClassification: React.FC<StepClassificationProps> = ({
               onChange={(e) => setFormData({ ...formData, existingDescription: e.target.value })}
               placeholder="Enter the current Oracle description..."
             />
+            {fieldErrors.existingDescription && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors.existingDescription}</p>}
           </div>
           <div className="mt-4">
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
@@ -59,6 +63,7 @@ export const StepClassification: React.FC<StepClassificationProps> = ({
               onChange={(e) => setFormData({ ...formData, proposedDescription: e.target.value })}
               placeholder="Enter the new proposed description..."
             />
+            {fieldErrors.proposedDescription && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors.proposedDescription}</p>}
           </div>
         </div>
       </>
@@ -96,6 +101,7 @@ export const StepClassification: React.FC<StepClassificationProps> = ({
             <button onClick={() => setDbChecked(false)} className="ml-auto text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition">Reset</button>
           </div>
         )}
+        {fieldErrors.dbChecked && <p className="text-xs text-red-600 dark:text-red-400 mt-2">{fieldErrors.dbChecked}</p>}
 
         {/* Classification — shown after DB check confirmed */}
         {dbChecked && (
@@ -165,6 +171,7 @@ export const StepClassification: React.FC<StepClassificationProps> = ({
                     </button>
                   ))}
                 </div>
+                {fieldErrors.serviceSubType && <p className="mt-2 text-xs text-red-600 dark:text-red-400">{fieldErrors.serviceSubType}</p>}
               </div>
             )}
           </>

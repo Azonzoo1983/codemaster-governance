@@ -11,6 +11,8 @@ interface DynamicFormProps {
   highlightEmpty?: boolean;
   /** Autocomplete suggestions keyed by attribute ID (e.g. { brand: ['SKF', 'Tenaris', ...] }) */
   suggestions?: Record<string, string[]>;
+  /** Per-field validation errors keyed by `attr_${id}` */
+  fieldErrors?: Record<string, string>;
 }
 
 const inputClasses = "w-full rounded-lg border-slate-300 dark:border-slate-600 shadow-sm focus:border-blue-500 focus:ring-blue-500/20 border p-2 disabled:bg-slate-100 dark:disabled:bg-slate-800 transition bg-white dark:bg-slate-700 dark:text-slate-200 dark:placeholder-slate-400";
@@ -36,7 +38,7 @@ function isEmpty(val: any, type: AttributeType): boolean {
   return true;
 }
 
-export const DynamicForm: React.FC<DynamicFormProps> = ({ attributes, values, onChange, readOnly = false, highlightEmpty = false, suggestions = {} }) => {
+export const DynamicForm: React.FC<DynamicFormProps> = ({ attributes, values, onChange, readOnly = false, highlightEmpty = false, suggestions = {}, fieldErrors = {} }) => {
 
   const sortedAttributes = [...attributes].sort((a, b) => a.descriptionOrder - b.descriptionOrder);
 
@@ -107,6 +109,9 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({ attributes, values, on
                 />
               )}
               {shouldHint && <RequiredHint />}
+              {fieldErrors[`attr_${attr.id}`] && (
+                <p className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors[`attr_${attr.id}`]}</p>
+              )}
             </>
           )}
 
@@ -124,6 +129,9 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({ attributes, values, on
                 rows={4}
               />
               {shouldHint && <RequiredHint />}
+              {fieldErrors[`attr_${attr.id}`] && (
+                <p className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors[`attr_${attr.id}`]}</p>
+              )}
             </>
           )}
 
@@ -141,6 +149,9 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({ attributes, values, on
                 className={getInputClasses(attr)}
               />
               {shouldHint && <RequiredHint />}
+              {fieldErrors[`attr_${attr.id}`] && (
+                <p className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors[`attr_${attr.id}`]}</p>
+              )}
             </>
           )}
 
@@ -169,6 +180,9 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({ attributes, values, on
                 </select>
               </div>
               {shouldHint && <RequiredHint />}
+              {fieldErrors[`attr_${attr.id}`] && (
+                <p className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors[`attr_${attr.id}`]}</p>
+              )}
             </>
           )}
 
@@ -187,6 +201,9 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({ attributes, values, on
                 {attr.options?.map(opt => <option key={opt} value={opt}>{opt}</option>)}
               </select>
               {shouldHint && <RequiredHint />}
+              {fieldErrors[`attr_${attr.id}`] && (
+                <p className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors[`attr_${attr.id}`]}</p>
+              )}
             </>
           )}
 
@@ -221,6 +238,9 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({ attributes, values, on
                 </div>
               </fieldset>
               {shouldHint && <RequiredHint />}
+              {fieldErrors[`attr_${attr.id}`] && (
+                <p className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors[`attr_${attr.id}`]}</p>
+              )}
             </>
           )}
 
@@ -269,6 +289,9 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({ attributes, values, on
                 </div>
               </fieldset>
               {shouldHint && <RequiredHint />}
+              {fieldErrors[`attr_${attr.id}`] && (
+                <p className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors[`attr_${attr.id}`]}</p>
+              )}
             </>
           )}
 

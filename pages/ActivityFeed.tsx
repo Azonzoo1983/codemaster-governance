@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useRequestStore, useUserStore } from '../stores';
-import { Activity, Clock, ArrowLeft, CheckCircle, XCircle, UserPlus, AlertTriangle, FileText, RefreshCw, Filter } from 'lucide-react';
+import { Activity, Clock, ArrowLeft, CheckCircle, XCircle, UserPlus, AlertTriangle, FileText, RefreshCw, Filter, Search } from 'lucide-react';
 import { EmptyState } from '../components/EmptyState';
 
 // --- Types ---
@@ -129,6 +129,8 @@ export const ActivityFeed: React.FC = () => {
 
   const [actionFilter, setActionFilter] = useState<ActionFilter>('All');
   const [timeRange, setTimeRange] = useState<TimeRange>('All');
+  const [userFilter, setUserFilter] = useState<string>('All');
+  const [searchQuery, setSearchQuery] = useState('');
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   // Collect all history entries from all requests into a flat array
@@ -152,12 +154,25 @@ export const ActivityFeed: React.FC = () => {
     return entries;
   }, [requests]);
 
+  const uniqueUsers = useMemo(() => {
+    const userSet = new Set(allEntries.map((e) => e.user));
+    return Array.from(userSet).sort();
+  }, [allEntries]);
+
   // Apply filters
   const filteredEntries = useMemo(() => {
-    return allEntries.filter(
-      (entry) => matchesActionFilter(entry.action, actionFilter) && matchesTimeRange(entry.timestamp, timeRange)
-    );
-  }, [allEntries, actionFilter, timeRange]);
+    return allEntries.filter((entry) => {
+      if (!matchesActionFilter(entry.action, actionFilter)) return false;
+      if (!matchesTimeRange(entry.timestamp, timeRange)) return false;
+      if (userFilter !== 'All' && entry.user !== userFilter) return false;
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        const searchable = `${entry.action} ${entry.details || ''} ${entry.requestId} ${entry.requestTitle} ${entry.user}`.toLowerCase();
+        if (!searchable.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [allEntries, actionFilter, timeRange, userFilter, searchQuery]);
 
   const visibleEntries = filteredEntries.slice(0, visibleCount);
   const hasMore = visibleCount < filteredEntries.length;
@@ -174,6 +189,16 @@ export const ActivityFeed: React.FC = () => {
 
   const handleTimeRangeChange = (val: TimeRange) => {
     setTimeRange(val);
+    setVisibleCount(PAGE_SIZE);
+  };
+
+  const handleUserFilterChange = (val: string) => {
+    setUserFilter(val);
+    setVisibleCount(PAGE_SIZE);
+  };
+
+  const handleSearchChange = (val: string) => {
+    setSearchQuery(val);
     setVisibleCount(PAGE_SIZE);
   };
 
@@ -244,9 +269,36 @@ export const ActivityFeed: React.FC = () => {
             <option value="Last 30 days">Last 30 days</option>
           </select>
         </div>
-        {(actionFilter !== 'All' || timeRange !== 'All') && (
+        <div className="flex items-center gap-2">
+          <label htmlFor="user-filter" className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+            User
+          </label>
+          <select
+            id="user-filter"
+            value={userFilter}
+            onChange={(e) => handleUserFilterChange(e.target.value)}
+            className="px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 transition"
+          >
+            <option value="All">All Users</option>
+            {uniqueUsers.map((u) => (
+              <option key={u} value={u}>{u}</option>
+            ))}
+          </select>
+        </div>
+        <div className="flex items-center gap-2 flex-1 min-w-[200px]">
+          <Search size={16} strokeWidth={1.75} className="text-slate-400 flex-shrink-0" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => handleSearchChange(e.target.value)}
+            placeholder="Search actions, titles, IDs..."
+            className="w-full px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 transition"
+            aria-label="Search activity feed"
+          />
+        </div>
+        {(actionFilter !== 'All' || timeRange !== 'All' || userFilter !== 'All' || searchQuery) && (
           <button
-            onClick={() => { handleActionFilterChange('All'); handleTimeRangeChange('All'); }}
+            onClick={() => { handleActionFilterChange('All'); handleTimeRangeChange('All'); handleUserFilterChange('All'); handleSearchChange(''); }}
             className="text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 font-medium transition"
           >
             Clear filters
@@ -261,7 +313,7 @@ export const ActivityFeed: React.FC = () => {
             icon={<Activity size={40} strokeWidth={1.5} />}
             title="No activity found"
             description={
-              actionFilter !== 'All' || timeRange !== 'All'
+              actionFilter !== 'All' || timeRange !== 'All' || userFilter !== 'All' || searchQuery
                 ? 'Try adjusting your filters to see more results.'
                 : 'Activity will appear here as requests are created and updated.'
             }
@@ -272,7 +324,7 @@ export const ActivityFeed: React.FC = () => {
             {visibleEntries.map((entry, idx) => (
               <div
                 key={`${entry.requestId}-${entry.timestamp}-${idx}`}
-                className="flex gap-4 p-4 hover:bg-slate-50/80 dark:hover:bg-slate-750 dark:hover:bg-slate-700/30 transition-colors"
+                className="flex gap-4 p-4 hover:bg-slate-50/80 dark:hover:bg-slate-700/30 transition-colors"
               >
                 {/* Timeline dot */}
                 <div className="flex flex-col items-center pt-1">

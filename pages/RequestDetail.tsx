@@ -8,6 +8,7 @@ import { ArrowLeft, CheckCircle, XCircle, UserPlus, AlertTriangle, FileCheck, Ma
 import { exportRequestPdf } from '../lib/exportRequestPdf';
 import { SLACountdown } from '../components/SLACountdown';
 import { RequestTimeline } from '../components/RequestTimeline';
+import { AttachmentThumbnail } from '../components/AttachmentThumbnail';
 
 export const RequestDetail: React.FC = () => {
   const navigate = useNavigate();
@@ -1004,10 +1005,7 @@ export const RequestDetail: React.FC = () => {
                   <dt className="text-slate-500 dark:text-slate-400 mb-2 flex items-center gap-1"><Paperclip size={12} /> Attachments</dt>
                   <dd className="space-y-1.5">
                     {request.attachments.map(att => (
-                      <a key={att.id} href={att.url} download={att.name} aria-label={`Download attachment ${att.name}`} className="flex items-center justify-between p-2 bg-slate-50 dark:bg-slate-700/50 rounded-lg border border-slate-200/60 dark:border-slate-700/60 hover:bg-slate-100 dark:hover:bg-slate-600/50 transition group">
-                        <span className="text-xs font-medium truncate max-w-[150px] dark:text-slate-200">{att.name}</span>
-                        <Download size={12} className="text-slate-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition" />
-                      </a>
+                      <AttachmentThumbnail key={att.id} attachment={att} />
                     ))}
                   </dd>
                 </div>

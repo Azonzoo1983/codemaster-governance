@@ -16,6 +16,8 @@ export const SHORTCUTS: Shortcut[] = [
   { key: 'k', description: 'Open Global Search', ctrl: true },
   { key: 'h', description: 'Go to Dashboard' },
   { key: 'r', description: 'Go to Reports' },
+  { key: 's', description: 'Save Draft (in form)', ctrl: true },
+  { key: 'Enter', description: 'Submit Request (in form)', ctrl: true },
 ];
 
 export function useKeyboardShortcuts() {
@@ -38,7 +40,12 @@ export function useKeyboardShortcuts() {
           (target as HTMLInputElement).blur();
           return;
         }
-        return;
+        // Allow Ctrl+S and Ctrl+Enter through to registered handlers
+        if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'Enter')) {
+          // Don't block — let it fall through to handlers below
+        } else {
+          return;
+        }
       }
 
       // Ctrl+K or Cmd+K — open global search

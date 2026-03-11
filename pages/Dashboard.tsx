@@ -18,7 +18,8 @@ import { FilterPresets } from '../components/FilterPresets';
 import type { FilterPreset } from '../components/FilterPresets';
 import { BulkUpload } from '../components/BulkUpload';
 
-const PAGE_SIZE = 15;
+const PAGE_SIZE_OPTIONS = [15, 25, 50, 100] as const;
+const PAGE_SIZE_KEY = 'cm-dashboard-page-size';
 const ANALYTICS_COLORS = ['#2563eb', '#f59e0b', '#ef4444', '#10b981', '#8b5cf6'];
 
 export const Dashboard: React.FC = () => {
@@ -36,6 +37,10 @@ export const Dashboard: React.FC = () => {
   const [sortField, setSortField] = useState<'createdAt' | 'priority' | 'status'>('createdAt');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number>(() => {
+    const saved = localStorage.getItem(PAGE_SIZE_KEY);
+    return saved ? Number(saved) : 15;
+  });
   const updateRequestStatus = useRequestStore((s) => s.updateRequestStatus);
   const updateRequest = useRequestStore((s) => s.updateRequest);
   const addToast = useToastStore((s) => s.addToast);
@@ -272,11 +277,17 @@ export const Dashboard: React.FC = () => {
   }, [filteredRequests, sortField, sortDir, priorities]);
 
   // Pagination
-  const totalPages = Math.max(1, Math.ceil(sortedRequests.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(sortedRequests.length / pageSize));
   const paginatedRequests = useMemo(() => {
-    const start = (page - 1) * PAGE_SIZE;
-    return sortedRequests.slice(start, start + PAGE_SIZE);
-  }, [sortedRequests, page]);
+    const start = (page - 1) * pageSize;
+    return sortedRequests.slice(start, start + pageSize);
+  }, [sortedRequests, page, pageSize]);
+
+  const handlePageSizeChange = (size: number) => {
+    setPageSize(size);
+    setPage(1);
+    localStorage.setItem(PAGE_SIZE_KEY, String(size));
+  };
 
   // Reset page when filters change
   useEffect(() => { setPage(1); }, [filterStatus, filterPriority, filterClassification, filterProject, searchQuery]);
@@ -1046,6 +1057,20 @@ export const Dashboard: React.FC = () => {
         {/* Pagination & Keyboard Navigation Hint */}
         <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between text-sm text-slate-600 dark:text-slate-400">
           <div className="flex items-center gap-4">
+            <div className="flex items-center gap-1.5">
+              <label htmlFor="page-size" className="text-xs text-slate-400 dark:text-slate-500">Show</label>
+              <select
+                id="page-size"
+                value={pageSize}
+                onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+                className="px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
+              >
+                {PAGE_SIZE_OPTIONS.map((size) => (
+                  <option key={size} value={size}>{size}</option>
+                ))}
+              </select>
+              <span className="text-xs text-slate-400 dark:text-slate-500">per page</span>
+            </div>
             {totalPages > 1 && <span>Page {page} of {totalPages}</span>}
             {paginatedRequests.length > 0 && (
               <span className="text-xs text-slate-400 dark:text-slate-500" aria-label="Keyboard navigation hints">

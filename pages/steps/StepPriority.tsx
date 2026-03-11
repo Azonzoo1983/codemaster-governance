@@ -16,6 +16,7 @@ interface Priority {
 interface StepPriorityProps {
   formData: Partial<RequestItem>;
   setFormData: (data: Partial<RequestItem>) => void;
+  fieldErrors?: Record<string, string>;
   priorities: Priority[];
   selectedPriority: Priority | undefined;
   isAmendment: boolean;
@@ -25,6 +26,7 @@ interface StepPriorityProps {
 export const StepPriority: React.FC<StepPriorityProps> = ({
   formData,
   setFormData,
+  fieldErrors = {},
   priorities,
   selectedPriority,
   isAmendment,
@@ -59,6 +61,7 @@ export const StepPriority: React.FC<StepPriorityProps> = ({
           </button>
         ))}
       </div>
+      {fieldErrors.priorityId && <p className="mt-2 text-xs text-red-600 dark:text-red-400">{fieldErrors.priorityId}</p>}
     </div>
 
     {/* Critical Priority - Approval Fields */}
@@ -78,6 +81,7 @@ export const StepPriority: React.FC<StepPriorityProps> = ({
             placeholder="Explain why this request is critical and requires same-day processing..."
             aria-required="true"
           />
+          {fieldErrors.justification && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors.justification}</p>}
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
@@ -90,6 +94,7 @@ export const StepPriority: React.FC<StepPriorityProps> = ({
               placeholder="e.g. John Doe"
               aria-required="true"
             />
+            {fieldErrors.managerName && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors.managerName}</p>}
           </div>
           <div>
             <label className="block text-sm font-medium text-rose-800 dark:text-rose-300 mb-1">Approving Manager Email <span className="text-rose-600">*</span></label>
@@ -101,6 +106,7 @@ export const StepPriority: React.FC<StepPriorityProps> = ({
               placeholder="e.g. john@company.com"
               aria-required="true"
             />
+            {fieldErrors.managerEmail && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors.managerEmail}</p>}
           </div>
         </div>
         <p className="text-xs text-rose-600 dark:text-rose-400 italic">

@@ -3,6 +3,7 @@ import { useAdminStore, useUserStore, useInviteStore, useToastStore, useBrandSto
 import { AttributeDefinition, AttributeType, Priority, Role, Brand, Classification } from '../types';
 import { Trash2, Plus, Edit, Link, Copy, Users, Mail, Shield, Clock, CheckCircle, XCircle, Send, Check, X, Pencil } from 'lucide-react';
 import { EmailNotificationSettings } from '../components/EmailNotificationSettings';
+import { SortableList } from '../components/SortableList';
 
 export const Admin: React.FC = () => {
   const attributes = useAdminStore((s) => s.attributes);
@@ -13,6 +14,8 @@ export const Admin: React.FC = () => {
   const updatePriority = useAdminStore((s) => s.updatePriority);
   const addPriority = useAdminStore((s) => s.addPriority);
   const deletePriority = useAdminStore((s) => s.deletePriority);
+  const reorderAttributes = useAdminStore((s) => s.reorderAttributes);
+  const reorderPriorities = useAdminStore((s) => s.reorderPriorities);
   const users = useUserStore((s) => s.users);
   const updateUserRole = useUserStore((s) => s.updateUserRole);
   const updateUser = useUserStore((s) => s.updateUser);
@@ -390,61 +393,62 @@ export const Admin: React.FC = () => {
           )}
 
           <div className="bg-white dark:bg-slate-800 rounded-xl shadow-premium border border-slate-200/60 dark:border-slate-700/60 overflow-x-auto">
-            <table className="w-full text-sm text-left">
-              <thead className="bg-slate-50/80 dark:bg-slate-700/50 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200/60 dark:border-slate-700/60">
-                <tr>
-                  <th scope="col" className="p-3 text-xs uppercase tracking-wider">Order</th>
-                  <th scope="col" className="p-3 text-xs uppercase tracking-wider">Name</th>
-                  <th scope="col" className="p-3 text-xs uppercase tracking-wider">Type</th>
-                  <th scope="col" className="p-3 text-xs uppercase tracking-wider">Visible For</th>
-                  <th scope="col" className="p-3 text-xs uppercase tracking-wider">Mandatory</th>
-                  <th scope="col" className="p-3 text-xs uppercase tracking-wider">In Desc.</th>
-                  <th scope="col" className="p-3 text-xs uppercase tracking-wider">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                {[...attributes]
+            {/* Header row */}
+            <div className="grid grid-cols-[2rem_1fr_6rem_5rem_5rem_5rem_5rem] gap-0 bg-slate-50/80 dark:bg-slate-700/50 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200/60 dark:border-slate-700/60 text-xs uppercase tracking-wider">
+              <div className="p-3"></div>
+              <div className="p-3">Name</div>
+              <div className="p-3">Type</div>
+              <div className="p-3">Visible For</div>
+              <div className="p-3 text-center">Mandatory</div>
+              <div className="p-3 text-center">In Desc.</div>
+              <div className="p-3">Actions</div>
+            </div>
+            {/* Sortable rows */}
+            <div className="divide-y divide-slate-100 dark:divide-slate-700 text-sm">
+              <SortableList
+                items={[...attributes]
                   .filter(attr => {
                     if (classificationFilter === 'all') return true;
                     const vis = attr.visibleForClassification;
-                    if (!vis) return true; // undefined = both
+                    if (!vis) return true;
                     return vis.includes(classificationFilter as Classification);
                   })
-                  .sort((a, b) => a.descriptionOrder - b.descriptionOrder).map(attr => {
+                  .sort((a, b) => a.descriptionOrder - b.descriptionOrder)}
+                onReorder={reorderAttributes}
+                renderItem={(attr: AttributeDefinition) => {
                   const vis = attr.visibleForClassification;
                   const isItem = !vis || vis.includes(Classification.ITEM);
                   const isService = !vis || vis.includes(Classification.SERVICE);
                   const visLabel = isItem && isService ? 'Both' : isItem ? 'Item' : 'Service';
                   return (
-                  <tr key={attr.id} className="table-row-hover">
-                    <td className="p-3 font-mono text-slate-600 dark:text-slate-400">{attr.descriptionOrder}</td>
-                    <td className="p-3 font-medium text-slate-900 dark:text-slate-100">{attr.name}</td>
-                    <td className="p-3 text-slate-600 dark:text-slate-400">{attr.type}</td>
-                    <td className="p-3">
-                      <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${
-                        visLabel === 'Both' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300' :
-                        visLabel === 'Item' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' :
-                        'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
-                      }`}>{visLabel}</span>
-                    </td>
-                    <td className="p-3 text-center">{attr.mandatory ? <span className="text-emerald-600 font-medium">Yes</span> : <span className="text-slate-400">-</span>}</td>
-                    <td className="p-3 text-center">{attr.includeInAutoDescription ? <span className="text-emerald-600 font-medium">Yes</span> : <span className="text-slate-400">-</span>}</td>
-                    <td className="p-3 flex gap-2">
-                      <button onClick={() => setEditingAttr(attr)} className="text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 p-1 rounded transition" aria-label={`Edit ${attr.name}`}><Edit size={16} strokeWidth={1.75} /></button>
-                      <button
-                        onClick={() => confirmDelete(attr.id, 'attribute')}
-                        className={`p-1 rounded transition ${confirmDeleteId === attr.id ? 'bg-rose-600 text-white' : 'text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/30'}`}
-                        title={confirmDeleteId === attr.id ? 'Click again to confirm' : 'Delete'}
-                        aria-label={confirmDeleteId === attr.id ? `Confirm delete ${attr.name}` : `Delete ${attr.name}`}
-                      >
-                        <Trash2 size={16} strokeWidth={1.75} />
-                      </button>
-                    </td>
-                  </tr>
+                    <div className="grid grid-cols-[1fr_6rem_5rem_5rem_5rem_5rem] gap-0 items-center table-row-hover">
+                      <div className="p-3 font-medium text-slate-900 dark:text-slate-100">{attr.name}</div>
+                      <div className="p-3 text-slate-600 dark:text-slate-400">{attr.type}</div>
+                      <div className="p-3">
+                        <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${
+                          visLabel === 'Both' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300' :
+                          visLabel === 'Item' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' :
+                          'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+                        }`}>{visLabel}</span>
+                      </div>
+                      <div className="p-3 text-center">{attr.mandatory ? <span className="text-emerald-600 font-medium">Yes</span> : <span className="text-slate-400">-</span>}</div>
+                      <div className="p-3 text-center">{attr.includeInAutoDescription ? <span className="text-emerald-600 font-medium">Yes</span> : <span className="text-slate-400">-</span>}</div>
+                      <div className="p-3 flex gap-2">
+                        <button onClick={() => setEditingAttr(attr)} className="text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 p-1 rounded transition" aria-label={`Edit ${attr.name}`}><Edit size={16} strokeWidth={1.75} /></button>
+                        <button
+                          onClick={() => confirmDelete(attr.id, 'attribute')}
+                          className={`p-1 rounded transition ${confirmDeleteId === attr.id ? 'bg-rose-600 text-white' : 'text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/30'}`}
+                          title={confirmDeleteId === attr.id ? 'Click again to confirm' : 'Delete'}
+                          aria-label={confirmDeleteId === attr.id ? `Confirm delete ${attr.name}` : `Delete ${attr.name}`}
+                        >
+                          <Trash2 size={16} strokeWidth={1.75} />
+                        </button>
+                      </div>
+                    </div>
                   );
-                })}
-              </tbody>
-            </table>
+                }}
+              />
+            </div>
           </div>
         </div>
       )}
@@ -515,27 +519,28 @@ export const Admin: React.FC = () => {
             </div>
           )}
 
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-premium border border-slate-200/60 dark:border-slate-700/60 overflow-x-auto">
-            <table className="w-full text-sm text-left min-w-[700px]">
-              <thead className="bg-slate-50/80 dark:bg-slate-700/50 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200/60 dark:border-slate-700/60">
-                <tr>
-                  <th scope="col" className="p-3 w-16 text-xs uppercase tracking-wider">Order</th>
-                  <th scope="col" className="p-3 w-24 text-xs uppercase tracking-wider">Name</th>
-                  <th scope="col" className="p-3 text-xs uppercase tracking-wider">Guidance Text</th>
-                  <th scope="col" className="p-3 w-16 text-xs uppercase tracking-wider">SLA</th>
-                  <th scope="col" className="p-3 w-24 text-center text-xs uppercase tracking-wider">Approval</th>
-                  <th scope="col" className="p-3 w-24 text-xs uppercase tracking-wider">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                {[...priorities].sort((a, b) => a.displayOrder - b.displayOrder).map(prio => (
-                  <tr key={prio.id} className="table-row-hover">
-                    <td className="p-3 font-mono text-slate-600 dark:text-slate-400">{prio.displayOrder}</td>
-                    <td className="p-3 font-medium text-slate-900 dark:text-slate-100">{prio.name}</td>
-                    <td className="p-3 text-slate-500 dark:text-slate-400 italic text-xs">{prio.description}</td>
-                    <td className="p-3 font-semibold">{prio.slaHours}h</td>
-                    <td className="p-3 text-center">{prio.requiresApproval ? <span className="text-rose-600 font-bold">Yes</span> : <span className="text-slate-400">No</span>}</td>
-                    <td className="p-3">
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-premium border border-slate-200/60 dark:border-slate-700/60 overflow-x-auto min-w-[700px]">
+            {/* Header row */}
+            <div className="grid grid-cols-[2rem_6rem_1fr_4rem_5rem_5rem] gap-0 bg-slate-50/80 dark:bg-slate-700/50 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200/60 dark:border-slate-700/60 text-xs uppercase tracking-wider">
+              <div className="p-3"></div>
+              <div className="p-3">Name</div>
+              <div className="p-3">Guidance Text</div>
+              <div className="p-3">SLA</div>
+              <div className="p-3 text-center">Approval</div>
+              <div className="p-3">Actions</div>
+            </div>
+            {/* Sortable rows */}
+            <div className="divide-y divide-slate-100 dark:divide-slate-700 text-sm">
+              <SortableList
+                items={[...priorities].sort((a, b) => a.displayOrder - b.displayOrder)}
+                onReorder={reorderPriorities}
+                renderItem={(prio: Priority) => (
+                  <div className="grid grid-cols-[6rem_1fr_4rem_5rem_5rem] gap-0 items-center table-row-hover">
+                    <div className="p-3 font-medium text-slate-900 dark:text-slate-100">{prio.name}</div>
+                    <div className="p-3 text-slate-500 dark:text-slate-400 italic text-xs">{prio.description}</div>
+                    <div className="p-3 font-semibold">{prio.slaHours}h</div>
+                    <div className="p-3 text-center">{prio.requiresApproval ? <span className="text-rose-600 font-bold">Yes</span> : <span className="text-slate-400">No</span>}</div>
+                    <div className="p-3">
                       <div className="flex gap-1">
                         <button onClick={() => setEditingPrio(prio)} className="text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 p-1 rounded transition" title="Edit" aria-label={`Edit ${prio.name}`}><Edit size={16} strokeWidth={1.75} /></button>
                         <button
@@ -547,11 +552,11 @@ export const Admin: React.FC = () => {
                           <Trash2 size={16} strokeWidth={1.75} />
                         </button>
                       </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    </div>
+                  </div>
+                )}
+              />
+            </div>
           </div>
         </div>
       )}
