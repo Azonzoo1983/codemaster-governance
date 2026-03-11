@@ -1,20 +1,19 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useUserStore, useAdminStore, useRequestStore, useToastStore, useBrandStore } from '../stores';
-import { Classification, MaterialSubType, ServiceSubType, RequestStatus, RequestItem, AttributeType } from '../types';
-import { DynamicForm } from '../components/DynamicForm';
-import { ArrowLeft, ArrowRight, Send, Info, AlertTriangle, CheckCircle, Paperclip, X, FileText, Eye, Upload, UploadCloud, Loader2, Save } from 'lucide-react';
+import { Classification, MaterialSubType, RequestStatus, RequestItem, AttributeType } from '../types';
+import { ArrowLeft, ArrowRight, Send, Info, Save } from 'lucide-react';
 import { uploadFile, validateFile, formatFileSize } from '../lib/fileUpload';
-import { HelpTooltip } from '../components/HelpTooltip';
-import { UnspscSearch } from '../components/UnspscSearch';
+import { StepRequestType } from './steps/StepRequestType';
+import { StepClassification } from './steps/StepClassification';
+import { StepDetails } from './steps/StepDetails';
+import { StepPriority } from './steps/StepPriority';
 
 const MAX_ATTACHMENT_SIZE = 10_000_000; // 10MB (upgraded with Supabase Storage)
 const TOTAL_STEPS = 4;
 const AUTOSAVE_KEY = 'cm-draft-autosave';
 const AUTOSAVE_INTERVAL = 30_000; // 30 seconds
 
-const SERVICE_UOM_OPTIONS = ['Days', 'Hours', 'Lumpsum', 'Each', 'Monthly', 'Weekly', 'Per Visit', 'Per Unit'];
-const ITEM_UOM_OPTIONS = ['Each', 'Set', 'Box', 'Pair', 'Meter', 'mm', 'Roll', 'Sheet', 'Piece', 'kg', 'g', 'Liter', 'Gallon', 'Drum', 'Bag', 'Bundle', 'Case', 'Pack', 'Ton', 'Foot', 'Inch'];
 
 export const NewRequest: React.FC = () => {
   const navigate = useNavigate();
@@ -404,9 +403,6 @@ export const NewRequest: React.FC = () => {
   };
 
   const [uploading, setUploading] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
-  const dragCounter = useRef(0);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const uploadSingleFile = async (file: File) => {
     const validation = validateFile(file);
@@ -437,8 +433,6 @@ export const NewRequest: React.FC = () => {
   const handleFileDrop = async (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
-    setIsDragging(false);
-    dragCounter.current = 0;
 
     const files = Array.from(e.dataTransfer.files);
     if (files.length === 0) return;
@@ -450,29 +444,6 @@ export const NewRequest: React.FC = () => {
       }
     } finally {
       setUploading(false);
-    }
-  };
-
-  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-  };
-
-  const handleDragEnter = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    dragCounter.current += 1;
-    if (dragCounter.current === 1) {
-      setIsDragging(true);
-    }
-  };
-
-  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    dragCounter.current -= 1;
-    if (dragCounter.current === 0) {
-      setIsDragging(false);
     }
   };
 
@@ -603,41 +574,7 @@ export const NewRequest: React.FC = () => {
         {/* ====== STEP 1: Request Type ====== */}
         {step === 1 && (
           <div className="space-y-6">
-            <h3 className="text-lg font-semibold text-slate-700 dark:text-slate-300">What type of request is this?</h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <button
-                onClick={() => setFormData({ ...formData, requestType: 'New', existingCode: '' })}
-                className={`p-5 border-2 rounded-xl text-left transition-all ${
-                  formData.requestType === 'New' ? 'border-blue-600 dark:border-blue-500 bg-blue-50 dark:bg-blue-900/30 shadow-premium ring-1 ring-blue-600/10 dark:ring-blue-500/20' : 'border-slate-200 dark:border-slate-600 hover:border-slate-400 dark:hover:border-slate-500'
-                }`}
-              >
-                <div className="flex items-center gap-3 mb-2">
-                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${formData.requestType === 'New' ? 'border-blue-600 dark:border-blue-400' : 'border-slate-300 dark:border-slate-500'}`}>
-                    {formData.requestType === 'New' && <div className="w-2.5 h-2.5 rounded-full bg-blue-600 dark:bg-blue-400" />}
-                  </div>
-                  <span className="font-bold text-lg text-slate-900 dark:text-slate-100">New Item</span>
-                </div>
-                <p className="text-sm text-slate-500 dark:text-slate-400 ml-8">Code does not exist in the system — create a new item or service code.</p>
-              </button>
-
-              <button
-                onClick={() => setFormData({ ...formData, requestType: 'Amendment' })}
-                className={`p-5 border-2 rounded-xl text-left transition-all ${
-                  formData.requestType === 'Amendment' ? 'border-blue-600 dark:border-blue-500 bg-blue-50 dark:bg-blue-900/30 shadow-premium ring-1 ring-blue-600/10 dark:ring-blue-500/20' : 'border-slate-200 dark:border-slate-600 hover:border-slate-400 dark:hover:border-slate-500'
-                }`}
-              >
-                <div className="flex items-center gap-3 mb-2">
-                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${formData.requestType === 'Amendment' ? 'border-blue-600 dark:border-blue-400' : 'border-slate-300 dark:border-slate-500'}`}>
-                    {formData.requestType === 'Amendment' && <div className="w-2.5 h-2.5 rounded-full bg-blue-600 dark:bg-blue-400" />}
-                  </div>
-                  <span className="font-bold text-lg text-slate-900 dark:text-slate-100">Amendment</span>
-                </div>
-                <p className="text-sm text-slate-500 dark:text-slate-400 ml-8">Code exists but description requires modification.</p>
-              </button>
-            </div>
-
-            {/* Navigation */}
+            <StepRequestType formData={formData} setFormData={setFormData} />
             <div className="flex justify-end pt-6 border-t border-slate-100 dark:border-slate-700">
               <button onClick={handleNext} className="btn-primary text-white px-6 py-2.5 rounded-lg flex items-center gap-2 transition" aria-label="Go to Step 2">
                 Next <ArrowRight size={16} />
@@ -646,162 +583,17 @@ export const NewRequest: React.FC = () => {
           </div>
         )}
 
-        {/* ====== STEP 2: DB Check & Classification (New) / Amendment Details ====== */}
+        {/* ====== STEP 2: DB Check & Classification / Amendment Details ====== */}
         {step === 2 && (
           <div className="space-y-6">
-
-            {isAmendment ? (
-              /* ---- Amendment: 3 fields only ---- */
-              <>
-                <h3 className="text-lg font-semibold text-slate-700 dark:text-slate-300">Amendment Details</h3>
-                <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200/60 dark:border-amber-700/60 rounded-xl p-4">
-                  <label className="block text-sm font-medium text-amber-800 dark:text-amber-300 mb-1">Existing Oracle Code <span className="text-red-500">*</span></label>
-                  <input
-                    type="text"
-                    className="w-full rounded-lg border-amber-200 dark:border-amber-700 shadow-sm border p-2.5 focus:border-amber-500 focus:ring-amber-500/20 transition bg-white dark:bg-slate-700 dark:text-slate-200 dark:placeholder-slate-400"
-                    value={formData.existingCode || ''}
-                    onChange={(e) => setFormData({ ...formData, existingCode: e.target.value })}
-                    placeholder="Enter the existing Oracle code..."
-                    aria-required="true"
-                    aria-label="Existing Oracle Code"
-                  />
-                  <div className="mt-4">
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                      Current Oracle Description <span className="text-red-500">*</span>
-                    </label>
-                    <textarea
-                      className="w-full rounded-lg border-slate-300 dark:border-slate-600 shadow-sm border p-2.5 focus:border-blue-500 focus:ring-blue-500/20 transition bg-white dark:bg-slate-700 dark:text-slate-200"
-                      rows={2}
-                      value={formData.existingDescription || ''}
-                      onChange={(e) => setFormData({ ...formData, existingDescription: e.target.value })}
-                      placeholder="Enter the current Oracle description..."
-                    />
-                  </div>
-                  <div className="mt-4">
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                      New Proposed Description <span className="text-red-500">*</span>
-                    </label>
-                    <textarea
-                      className="w-full rounded-lg border-slate-300 dark:border-slate-600 shadow-sm border p-2.5 focus:border-blue-500 focus:ring-blue-500/20 transition bg-white dark:bg-slate-700 dark:text-slate-200"
-                      rows={3}
-                      value={formData.proposedDescription || ''}
-                      onChange={(e) => setFormData({ ...formData, proposedDescription: e.target.value })}
-                      placeholder="Enter the new proposed description..."
-                    />
-                  </div>
-                </div>
-              </>
-            ) : (
-              /* ---- New Item: DB Check gate + Classification ---- */
-              <>
-                <h3 className="text-lg font-semibold text-slate-700 dark:text-slate-300">Database Check & Classification</h3>
-
-                {/* DB Check gate */}
-                {!dbChecked ? (
-                  <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200/60 dark:border-amber-700/60 rounded-xl p-6">
-                    <div className="flex items-center gap-3 mb-3">
-                      <AlertTriangle size={20} className="text-amber-500 dark:text-amber-400 shrink-0" />
-                      <p className="text-amber-800 dark:text-amber-300 font-medium">Have you checked the Oracle ERP database to confirm this code does not already exist?</p>
-                    </div>
-                    <div className="flex gap-3">
-                      <button
-                        onClick={() => addToast('You must check the Oracle ERP database before proceeding. Please verify the code does not already exist.', 'warning')}
-                        className="px-5 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 font-medium text-slate-700 dark:text-slate-300 transition text-sm"
-                      >
-                        No, I haven't
-                      </button>
-                      <button
-                        onClick={() => setDbChecked(true)}
-                        className="btn-primary px-5 py-2.5 text-white rounded-lg font-medium transition text-sm"
-                      >
-                        Yes, I have checked
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200/60 dark:border-emerald-700/60 rounded-xl p-3 flex items-center gap-2">
-                    <CheckCircle size={18} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
-                    <p className="text-sm text-emerald-800 dark:text-emerald-300 font-medium">Database verification confirmed</p>
-                    <button onClick={() => setDbChecked(false)} className="ml-auto text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition">Reset</button>
-                  </div>
-                )}
-
-                {/* Classification — shown after DB check confirmed */}
-                {dbChecked && (
-                  <>
-                    <div className="pt-4 border-t border-slate-100 dark:border-slate-700">
-                      <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-3">Classification<HelpTooltip text="Choose 'Item' for physical materials/parts or 'Service' for service-based coding requests" /></label>
-                      <div className="flex gap-4">
-                        {[Classification.ITEM, Classification.SERVICE].map(c => (
-                          <button
-                            key={c}
-                            onClick={() => setFormData({
-                              ...formData,
-                              classification: c,
-                              materialSubType: c === Classification.ITEM ? MaterialSubType.DIRECT_NONSTOCK : undefined,
-                              serviceSubType: c === Classification.SERVICE ? undefined : undefined,
-                              attributes: {},
-                            })}
-                            className={`flex-1 py-3.5 border-2 rounded-lg text-center font-semibold transition-all ${
-                              formData.classification === c
-                                ? 'bg-slate-800 dark:bg-slate-200 text-white dark:text-slate-800 border-slate-800 dark:border-slate-200 shadow-premium'
-                                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-300 dark:border-slate-600 hover:border-slate-400 dark:hover:border-slate-500'
-                            }`}
-                          >
-                            {c === Classification.ITEM ? 'Material (Item)' : 'Service'}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Sub-Type Selection */}
-                    {formData.classification === Classification.ITEM && (
-                      <div>
-                        <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-3">Material Sub-Type</label>
-                        <div className="grid grid-cols-3 gap-3">
-                          {Object.values(MaterialSubType).map(st => (
-                            <button
-                              key={st}
-                              onClick={() => setFormData({ ...formData, materialSubType: st })}
-                              className={`p-3 border-2 rounded-lg text-center text-sm font-medium transition-all ${
-                                formData.materialSubType === st
-                                  ? 'border-blue-600 dark:border-blue-500 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 ring-1 ring-blue-600/10 dark:ring-blue-500/20'
-                                  : 'border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:border-slate-400 dark:hover:border-slate-500'
-                              }`}
-                            >
-                              {st}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {formData.classification === Classification.SERVICE && (
-                      <div>
-                        <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-3">Service Sub-Type <span className="text-red-500">*</span></label>
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                          {Object.values(ServiceSubType).map(st => (
-                            <button
-                              key={st}
-                              onClick={() => setFormData({ ...formData, serviceSubType: st })}
-                              className={`p-3 border-2 rounded-lg text-center text-sm font-medium transition-all ${
-                                formData.serviceSubType === st
-                                  ? 'border-blue-600 dark:border-blue-500 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 ring-1 ring-blue-600/10 dark:ring-blue-500/20'
-                                  : 'border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:border-slate-400 dark:hover:border-slate-500'
-                            }`}
-                            >
-                              {st}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </>
-                )}
-              </>
-            )}
-
-            {/* Navigation */}
+            <StepClassification
+              isAmendment={isAmendment}
+              formData={formData}
+              setFormData={setFormData}
+              dbChecked={dbChecked}
+              setDbChecked={setDbChecked}
+              addToast={addToast}
+            />
             <div className="flex justify-between pt-6 border-t border-slate-100 dark:border-slate-700">
               <button onClick={handleBack} className="text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 flex items-center gap-1 transition" aria-label="Go back to Step 1: Request Type">
                 <ArrowLeft size={16} /> Back
@@ -816,216 +608,17 @@ export const NewRequest: React.FC = () => {
         {/* ====== STEP 3: Core Details & Attributes ====== */}
         {step === 3 && (
           <div className="space-y-6">
-            <h3 className="text-lg font-semibold text-slate-700 dark:text-slate-300">Core Details & Specifications</h3>
-
-            {/* Auto-Description Preview */}
-            <div className="bg-blue-50/50 dark:bg-blue-900/20 border border-blue-100/60 dark:border-blue-800/60 p-4 rounded-xl">
-              <div className="flex items-center gap-2 mb-1">
-                <Eye size={14} className="text-blue-500 dark:text-blue-400" />
-                <h4 className="text-xs uppercase font-bold text-blue-500 dark:text-blue-400 tracking-wide">Auto-Generated Description Preview</h4>
-              </div>
-              <p className="font-mono text-base text-blue-900 dark:text-blue-200 break-all min-h-[24px]">
-                {generatedDescription || '(Complete attributes below to generate)'}
-              </p>
-            </div>
-
-            {/* UNSPSC Code */}
-            <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                UNSPSC Commodity Code
-                <HelpTooltip text="Search by UNSPSC code number or description to find the right commodity classification" />
-              </label>
-              <UnspscSearch
-                value={formData.unspscCode || ''}
-                onChange={(code) => setFormData({ ...formData, unspscCode: code })}
-                disabled={false}
-              />
-            </div>
-
-            {/* Short Description (240 chars) */}
-            <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                Short Description (max 240 characters)
-                <HelpTooltip text="A concise description for Oracle. Auto-populated from the generated description but can be edited." />
-              </label>
-              <input
-                type="text"
-                maxLength={240}
-                className="w-full rounded-lg border-slate-300 dark:border-slate-600 shadow-sm border p-2.5 focus:border-blue-500 focus:ring-blue-500/20 transition bg-white dark:bg-slate-700 dark:text-slate-200"
-                value={formData.shortDescription || generatedDescription?.slice(0, 240) || ''}
-                onChange={(e) => setFormData({ ...formData, shortDescription: e.target.value })}
-                placeholder="Short description for Oracle..."
-              />
-              <div className="text-xs text-slate-400 text-right mt-1">
-                {(formData.shortDescription || generatedDescription?.slice(0, 240) || '').length}/240
-              </div>
-            </div>
-
-            {/* Long Description (500 chars) */}
-            <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                Long Description (max 500 characters)
-                <HelpTooltip text="A detailed description with full specifications. Can include additional details not in the short description." />
-              </label>
-              <textarea
-                maxLength={500}
-                rows={3}
-                className="w-full rounded-lg border-slate-300 dark:border-slate-600 shadow-sm border p-2.5 focus:border-blue-500 focus:ring-blue-500/20 transition bg-white dark:bg-slate-700 dark:text-slate-200"
-                value={formData.longDescription || ''}
-                onChange={(e) => setFormData({ ...formData, longDescription: e.target.value })}
-                placeholder="Detailed description with full specifications..."
-              />
-              <div className="text-xs text-slate-400 text-right mt-1">
-                {(formData.longDescription || '').length}/500
-              </div>
-            </div>
-
-            {/* Brand/Manufacturer — handled by DynamicForm ComboBoxInput via suggestions prop */}
-
-            {/* Core Fields */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Project Code <span className="text-red-500">*</span></label>
-                <input
-                  type="text"
-                  className="w-full rounded-lg border-slate-300 dark:border-slate-600 shadow-sm border p-2.5 focus:border-blue-500 focus:ring-blue-500/20 transition bg-white dark:bg-slate-700 dark:text-slate-200 dark:placeholder-slate-400"
-                  value={formData.project || ''}
-                  onChange={(e) => setFormData({ ...formData, project: e.target.value })}
-                  placeholder="e.g. PRJ-2026-001"
-                  aria-required="true"
-                  aria-describedby={validationErrors.length > 0 ? 'validation-errors' : undefined}
-                />
-              </div>
-
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Resource Code</label>
-                <input
-                  type="text"
-                  className="w-full rounded-lg border-slate-300 dark:border-slate-600 shadow-sm border p-2.5 focus:border-blue-500 focus:ring-blue-500/20 transition bg-white dark:bg-slate-700 dark:text-slate-200 dark:placeholder-slate-400"
-                  value={formData.resourceCode || ''}
-                  onChange={(e) => setFormData({ ...formData, resourceCode: e.target.value })}
-                  placeholder="Optional"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                  Unit of Measurement (UOM)
-                  {formData.classification === Classification.SERVICE && <span className="text-red-500"> *</span>}
-                </label>
-                {formData.classification === Classification.SERVICE ? (
-                  <select
-                    className="w-full rounded-lg border-slate-300 dark:border-slate-600 shadow-sm border p-2.5 focus:border-blue-500 focus:ring-blue-500/20 transition bg-white dark:bg-slate-700 dark:text-slate-200"
-                    value={formData.uom || ''}
-                    onChange={(e) => setFormData({ ...formData, uom: e.target.value })}
-                    aria-required="true"
-                    aria-label="Unit of Measurement"
-                  >
-                    <option value="">Select UOM...</option>
-                    {SERVICE_UOM_OPTIONS.map(u => <option key={u} value={u}>{u}</option>)}
-                  </select>
-                ) : (
-                  <select
-                    className="w-full rounded-lg border-slate-300 dark:border-slate-600 shadow-sm border p-2.5 focus:border-blue-500 focus:ring-blue-500/20 transition bg-white dark:bg-slate-700 dark:text-slate-200"
-                    value={formData.uom || ''}
-                    onChange={(e) => setFormData({ ...formData, uom: e.target.value })}
-                    aria-label="Unit of Measurement"
-                  >
-                    <option value="">Select UOM...</option>
-                    {ITEM_UOM_OPTIONS.map(u => <option key={u} value={u}>{u}</option>)}
-                  </select>
-                )}
-              </div>
-            </div>
-
-            {/* Dynamic Attributes */}
-            <div className="pt-4 border-t border-slate-100 dark:border-slate-700">
-              <h4 className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-4 uppercase tracking-wide">
-                {formData.classification === Classification.ITEM ? 'Material Attributes' : 'Service Attributes'}
-              </h4>
-              <DynamicForm
-                attributes={relevantAttributes}
-                values={formData.attributes || {}}
-                onChange={(key, val) => setFormData(prev => ({ ...prev, attributes: { ...prev.attributes, [key]: val } }))}
-                highlightEmpty={!!requestId}
-                suggestions={attributeSuggestions}
-              />
-            </div>
-
-            {/* Attachments */}
-            <div className="pt-4 border-t border-slate-100 dark:border-slate-700">
-              <h4 className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-3 flex items-center gap-2">
-                <Paperclip size={14} strokeWidth={1.75} /> Attachments<HelpTooltip text="Upload supporting documents like specifications, drawings, or data sheets (max 10MB each)" />
-              </h4>
-              <div
-                onDragEnter={handleDragEnter}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleFileDrop}
-                onClick={() => !uploading && fileInputRef.current?.click()}
-                className={`relative rounded-xl border-2 border-dashed transition-all duration-200 cursor-pointer
-                  ${isDragging
-                    ? 'border-blue-500 bg-blue-50/70 dark:border-blue-400 dark:bg-blue-500/10'
-                    : 'border-slate-300 dark:border-slate-600 bg-slate-50/50 dark:bg-slate-800/30 hover:border-blue-400 hover:bg-blue-50/40 dark:hover:border-blue-500/60 dark:hover:bg-blue-500/5'
-                  }
-                  ${uploading ? 'pointer-events-none' : ''}
-                `}
-              >
-                {uploading && (
-                  <div className="absolute inset-0 bg-white/60 dark:bg-slate-900/60 rounded-xl flex items-center justify-center z-10 backdrop-blur-[1px]">
-                    <div className="flex flex-col items-center gap-2">
-                      <Loader2 size={28} strokeWidth={1.75} className="animate-spin text-blue-500 dark:text-blue-400" />
-                      <span className="text-sm font-medium text-blue-600 dark:text-blue-400">Uploading...</span>
-                    </div>
-                  </div>
-                )}
-                <div className="flex flex-col items-center justify-center py-8 px-4">
-                  <div className={`p-3 rounded-full mb-3 transition-colors ${isDragging ? 'bg-blue-100 dark:bg-blue-500/20' : 'bg-slate-100 dark:bg-slate-700/60'}`}>
-                    <UploadCloud size={28} strokeWidth={1.5} className={`transition-colors ${isDragging ? 'text-blue-500 dark:text-blue-400' : 'text-slate-400 dark:text-slate-500'}`} />
-                  </div>
-                  <p className="text-sm font-medium text-slate-600 dark:text-slate-300 mb-1">
-                    {isDragging ? 'Drop files here' : 'Drag & drop files here or click to browse'}
-                  </p>
-                  <p className="text-xs text-slate-400 dark:text-slate-500">
-                    Max 10MB per file (Images, PDF, Office, CSV)
-                  </p>
-                </div>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  className="hidden"
-                  accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt"
-                  multiple
-                  onChange={handleFileUpload}
-                  disabled={uploading}
-                  aria-label="Attach file"
-                />
-              </div>
-
-              {formData.attachments && formData.attachments.length > 0 && (
-                <ul className="mt-3 space-y-2">
-                  {formData.attachments.map(att => (
-                    <li key={att.id} className="flex items-center justify-between bg-slate-50 dark:bg-slate-700/50 p-2.5 rounded-lg border border-slate-200/60 dark:border-slate-600 text-sm">
-                      <div className="flex items-center gap-2 overflow-hidden">
-                        <FileText size={14} className="text-slate-400 dark:text-slate-500 shrink-0" />
-                        <span className="truncate max-w-[200px] text-slate-700 dark:text-slate-300">{att.name}</span>
-                        <span className="text-xs text-slate-400 dark:text-slate-500">({formatFileSize(att.size)})</span>
-                      </div>
-                      <button
-                        onClick={() => setFormData(prev => ({ ...prev, attachments: prev.attachments?.filter(a => a.id !== att.id) }))}
-                        className="text-rose-500 hover:text-rose-700 dark:text-rose-400 dark:hover:text-rose-300 p-1 transition"
-                        aria-label={`Remove attachment ${att.name}`}
-                      >
-                        <X size={14} />
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            {/* Navigation */}
+            <StepDetails
+              formData={formData}
+              setFormData={setFormData}
+              generatedDescription={generatedDescription}
+              relevantAttributes={relevantAttributes}
+              attributeSuggestions={attributeSuggestions}
+              requestId={requestId}
+              uploading={uploading}
+              onFileUpload={handleFileUpload}
+              onFileDrop={handleFileDrop}
+            />
             <div className="flex justify-between pt-6 border-t border-slate-100 dark:border-slate-700">
               <button onClick={handleBack} className="text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 flex items-center gap-1 transition" aria-label="Go back to Step 2: DB Check & Classification">
                 <ArrowLeft size={16} /> Back
@@ -1040,156 +633,14 @@ export const NewRequest: React.FC = () => {
         {/* ====== STEP 4: Urgency, Priority & Review ====== */}
         {step === 4 && (
           <div className="space-y-6">
-            <h3 className="text-lg font-semibold text-slate-700 dark:text-slate-300">Urgency, Priority & Final Review</h3>
-
-            {/* Priority Selection */}
-            <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">Priority Level <span className="text-red-500">*</span><HelpTooltip text="Normal: 2 business days. Urgent: 1 day. Critical: same day (requires manager approval)" /></label>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                {priorities.filter(p => p.active).sort((a, b) => a.displayOrder - b.displayOrder).map(p => (
-                  <button
-                    key={p.id}
-                    onClick={() => setFormData({ ...formData, priorityId: p.id })}
-                    className={`p-4 border-2 rounded-xl text-left transition-all ${
-                      formData.priorityId === p.id
-                        ? p.name === 'Critical'
-                          ? 'border-rose-500 bg-rose-50 dark:bg-rose-900/30 shadow-premium ring-1 ring-rose-500/20'
-                          : p.name === 'Urgent'
-                            ? 'border-amber-500 bg-amber-50 dark:bg-amber-900/30 shadow-premium ring-1 ring-amber-500/20'
-                            : 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/30 shadow-premium ring-1 ring-emerald-500/20'
-                        : 'border-slate-200 dark:border-slate-600 hover:border-slate-300 dark:hover:border-slate-500'
-                    }`}
-                  >
-                    <div className="font-bold text-base mb-1 text-slate-900 dark:text-slate-100">{p.name}</div>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">{p.description}</p>
-                    {p.slaHours && (
-                      <p className="text-xs font-medium mt-2 text-slate-600 dark:text-slate-400">SLA: {p.slaHours}h</p>
-                    )}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Critical Priority - Approval Fields */}
-            {selectedPriority?.requiresApproval && (
-              <div className="bg-rose-50 dark:bg-rose-900/30 border border-rose-200/60 dark:border-rose-700/60 rounded-xl p-5 space-y-4">
-                <div className="flex items-center gap-2 text-rose-800 dark:text-rose-300">
-                  <AlertTriangle size={18} strokeWidth={1.75} />
-                  <span className="font-semibold">Critical Priority - Manager Approval Required</span>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-rose-800 dark:text-rose-300 mb-1">Justification <span className="text-rose-600">*</span></label>
-                  <textarea
-                    className="w-full rounded-lg border-rose-200 dark:border-rose-700 shadow-sm border p-3 focus:border-rose-500 focus:ring-rose-500/20 transition bg-white dark:bg-slate-700 dark:text-slate-200 dark:placeholder-slate-400"
-                    rows={3}
-                    value={formData.justification || ''}
-                    onChange={(e) => setFormData({ ...formData, justification: e.target.value })}
-                    placeholder="Explain why this request is critical and requires same-day processing..."
-                    aria-required="true"
-                  />
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-rose-800 dark:text-rose-300 mb-1">Approving Manager Name <span className="text-rose-600">*</span></label>
-                    <input
-                      type="text"
-                      className="w-full rounded-lg border-rose-200 dark:border-rose-700 shadow-sm border p-2.5 focus:border-rose-500 focus:ring-rose-500/20 transition bg-white dark:bg-slate-700 dark:text-slate-200 dark:placeholder-slate-400"
-                      value={formData.managerName || ''}
-                      onChange={(e) => setFormData({ ...formData, managerName: e.target.value })}
-                      placeholder="e.g. John Doe"
-                      aria-required="true"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-rose-800 dark:text-rose-300 mb-1">Approving Manager Email <span className="text-rose-600">*</span></label>
-                    <input
-                      type="email"
-                      className="w-full rounded-lg border-rose-200 dark:border-rose-700 shadow-sm border p-2.5 focus:border-rose-500 focus:ring-rose-500/20 transition bg-white dark:bg-slate-700 dark:text-slate-200 dark:placeholder-slate-400"
-                      value={formData.managerEmail || ''}
-                      onChange={(e) => setFormData({ ...formData, managerEmail: e.target.value })}
-                      placeholder="e.g. john@company.com"
-                      aria-required="true"
-                    />
-                  </div>
-                </div>
-                <p className="text-xs text-rose-600 dark:text-rose-400 italic">
-                  This request will require manager approval before it reaches the coding team.
-                  {selectedPriority.slaHours && ` Must be submitted at least ${selectedPriority.slaHours} hours before end of business.`}
-                </p>
-              </div>
-            )}
-
-            {/* Review Summary */}
-            <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200/60 dark:border-slate-700/60 rounded-xl p-5 mt-4">
-              <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide mb-4 flex items-center gap-2">
-                <Eye size={16} strokeWidth={1.75} /> Request Summary
-              </h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                <div className="flex justify-between py-2 border-b border-slate-200/60 dark:border-slate-700/60">
-                  <span className="text-slate-500 dark:text-slate-400">Request Type</span>
-                  <span className="font-medium text-slate-800 dark:text-slate-200">{formData.requestType}</span>
-                </div>
-                <div className="flex justify-between py-2 border-b border-slate-200/60 dark:border-slate-700/60">
-                  <span className="text-slate-500 dark:text-slate-400">Classification</span>
-                  <span className="font-medium text-slate-800 dark:text-slate-200">{formData.classification}</span>
-                </div>
-                {formData.classification === Classification.ITEM && formData.materialSubType && (
-                  <div className="flex justify-between py-2 border-b border-slate-200/60 dark:border-slate-700/60">
-                    <span className="text-slate-500 dark:text-slate-400">Material Sub-Type</span>
-                    <span className="font-medium text-slate-800 dark:text-slate-200">{formData.materialSubType}</span>
-                  </div>
-                )}
-                {formData.classification === Classification.SERVICE && formData.serviceSubType && (
-                  <div className="flex justify-between py-2 border-b border-slate-200/60 dark:border-slate-700/60">
-                    <span className="text-slate-500 dark:text-slate-400">Service Sub-Type</span>
-                    <span className="font-medium text-slate-800 dark:text-slate-200">{formData.serviceSubType}</span>
-                  </div>
-                )}
-                {formData.existingCode && (
-                  <div className="flex justify-between py-2 border-b border-slate-200/60 dark:border-slate-700/60">
-                    <span className="text-slate-500 dark:text-slate-400">Existing Code</span>
-                    <span className="font-medium text-slate-800 dark:text-slate-200">{formData.existingCode}</span>
-                  </div>
-                )}
-                {formData.project && (
-                  <div className="flex justify-between py-2 border-b border-slate-200/60 dark:border-slate-700/60">
-                    <span className="text-slate-500 dark:text-slate-400">Project Code</span>
-                    <span className="font-medium text-slate-800 dark:text-slate-200">{formData.project}</span>
-                  </div>
-                )}
-                {formData.unspscCode && (
-                  <div className="flex justify-between py-2 border-b border-slate-200/60 dark:border-slate-700/60">
-                    <span className="text-slate-500 dark:text-slate-400">UNSPSC Code</span>
-                    <span className="font-medium text-slate-800 dark:text-slate-200">{formData.unspscCode}</span>
-                  </div>
-                )}
-                {formData.uom && (
-                  <div className="flex justify-between py-2 border-b border-slate-200/60 dark:border-slate-700/60">
-                    <span className="text-slate-500 dark:text-slate-400">UOM</span>
-                    <span className="font-medium text-slate-800 dark:text-slate-200">{formData.uom}</span>
-                  </div>
-                )}
-                <div className="flex justify-between py-2 border-b border-slate-200/60 dark:border-slate-700/60">
-                  <span className="text-slate-500 dark:text-slate-400">Priority</span>
-                  <span className={`font-medium ${selectedPriority?.name === 'Critical' ? 'text-rose-600 dark:text-rose-400' : selectedPriority?.name === 'Urgent' ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
-                    {selectedPriority?.name || 'Not selected'}
-                  </span>
-                </div>
-                <div className="flex justify-between py-2 border-b border-slate-200/60 dark:border-slate-700/60">
-                  <span className="text-slate-500 dark:text-slate-400">Attachments</span>
-                  <span className="font-medium text-slate-800 dark:text-slate-200">{formData.attachments?.length || 0} file(s)</span>
-                </div>
-              </div>
-
-              {generatedDescription && (
-                <div className="mt-4 bg-blue-50/50 dark:bg-blue-900/20 border border-blue-100/60 dark:border-blue-800/60 rounded-xl p-3">
-                  <p className="text-xs uppercase font-bold text-blue-500 dark:text-blue-400 mb-1 tracking-wide">Auto-Generated Description</p>
-                  <p className="font-mono text-sm text-blue-900 dark:text-blue-200">{generatedDescription}</p>
-                </div>
-              )}
-            </div>
-
-            {/* Navigation */}
+            <StepPriority
+              formData={formData}
+              setFormData={setFormData}
+              priorities={priorities}
+              selectedPriority={selectedPriority}
+              isAmendment={isAmendment}
+              generatedDescription={generatedDescription}
+            />
             <div className="flex justify-between pt-6 border-t border-slate-100 dark:border-slate-700">
               <button onClick={handleBack} className="text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 flex items-center gap-1 transition" aria-label="Go back to Step 3: Details & Attributes">
                 <ArrowLeft size={16} /> Back
