@@ -1,10 +1,9 @@
 import React, { useState, useCallback, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useAdminStore, useToastStore, useWorkflowStore } from '../stores';
 import { RequestStatus } from '../types';
 import type { WorkflowConfig } from '../stores/workflowStore';
 import {
-  ArrowLeft, Plus, Trash2, GripVertical, Save, RotateCcw,
+  Plus, Trash2, GripVertical, Save, RotateCcw,
   ArrowRight, CheckCircle, XCircle, AlertTriangle, Clock,
   ChevronDown, ChevronUp, Settings, Zap, Users,
 } from 'lucide-react';
@@ -27,7 +26,6 @@ const NodeIcon: React.FC<{ icon: WorkflowNode['icon']; size?: number }> = ({ ico
 };
 
 export const WorkflowBuilder: React.FC = () => {
-  const navigate = useNavigate();
   const addToast = useToastStore((s) => s.addToast);
   const workflow = useWorkflowStore((s) => s.workflow);
   const setWorkflow = useWorkflowStore((s) => s.setWorkflow);
@@ -153,9 +151,6 @@ export const WorkflowBuilder: React.FC = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <button onClick={() => navigate('/')} className="text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition" aria-label="Back to dashboard">
-            <ArrowLeft size={20} />
-          </button>
           <div>
             <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100 tracking-tight">Workflow Builder</h2>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{workflow.name}</p>

@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useRequestStore, useUserStore } from '../stores';
-import { Activity, Clock, ArrowLeft, CheckCircle, XCircle, UserPlus, AlertTriangle, FileText, RefreshCw, Filter, Search } from 'lucide-react';
+import { Activity, Clock, CheckCircle, XCircle, UserPlus, AlertTriangle, FileText, RefreshCw, Filter, Search } from 'lucide-react';
 import { EmptyState } from '../components/EmptyState';
 
 // --- Types ---
@@ -207,13 +207,6 @@ export const ActivityFeed: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-4">
         <div className="flex items-center gap-4 flex-1">
-          <button
-            onClick={() => navigate('/')}
-            className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full transition"
-            aria-label="Back to Dashboard"
-          >
-            <ArrowLeft size={20} strokeWidth={1.75} className="text-slate-600 dark:text-slate-300" />
-          </button>
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center shadow-md">
               <Activity size={20} strokeWidth={1.75} className="text-white" />

@@ -4,6 +4,8 @@ import { AttributeDefinition, AttributeType, Priority, Role, Brand, Classificati
 import { Trash2, Plus, Edit, Link, Copy, Users, Mail, Shield, Clock, CheckCircle, XCircle, Send, Check, X, Pencil } from 'lucide-react';
 import { EmailNotificationSettings } from '../components/EmailNotificationSettings';
 import { SortableList } from '../components/SortableList';
+import { WorkflowBuilder } from './WorkflowBuilder';
+import { ActivityFeed } from './ActivityFeed';
 
 export const Admin: React.FC = () => {
   const attributes = useAdminStore((s) => s.attributes);
@@ -28,7 +30,7 @@ export const Admin: React.FC = () => {
   const addBrand = useBrandStore((s) => s.addBrand);
   const updateBrand = useBrandStore((s) => s.updateBrand);
   const deleteBrand = useBrandStore((s) => s.deleteBrand);
-  const [activeTab, setActiveTab] = useState<'attributes' | 'priorities' | 'users' | 'invites' | 'emails' | 'brands'>('attributes');
+  const [activeTab, setActiveTab] = useState<'attributes' | 'priorities' | 'users' | 'invites' | 'emails' | 'brands' | 'workflow' | 'activity'>('attributes');
 
   const [editingAttr, setEditingAttr] = useState<Partial<AttributeDefinition> | null>(null);
   const [editingPrio, setEditingPrio] = useState<Partial<Priority> | null>(null);
@@ -214,6 +216,8 @@ export const Admin: React.FC = () => {
     { key: 'invites' as const, label: 'Invitations' },
     { key: 'emails' as const, label: 'Email Notifications' },
     { key: 'brands' as const, label: 'Brands' },
+    { key: 'workflow' as const, label: 'Workflow Builder' },
+    { key: 'activity' as const, label: 'Activity Feed' },
   ];
 
   const roleOptions = Object.values(Role);
@@ -1083,6 +1087,14 @@ export const Admin: React.FC = () => {
             </table>
           </div>
         </div>
+      )}
+
+      {activeTab === 'workflow' && (
+        <WorkflowBuilder />
+      )}
+
+      {activeTab === 'activity' && (
+        <ActivityFeed />
       )}
     </div>
   );
