@@ -3,7 +3,7 @@ import { persist } from 'zustand/middleware';
 import { Role } from '../types';
 
 export interface DashboardWidget {
-  id: string; // 'kpi-cards' | 'analytics' | 'performance' | 'request-table'
+  id: string; // 'kpi-cards' | 'request-table'
   label: string;
   visible: boolean;
   order: number;
@@ -22,38 +22,11 @@ interface LayoutState {
 
 const DEFAULT_WIDGETS: DashboardWidget[] = [
   { id: 'kpi-cards', label: 'KPI Cards', visible: true, order: 0 },
-  { id: 'analytics', label: 'Analytics', visible: true, order: 1 },
-  { id: 'performance', label: 'Specialist Performance', visible: true, order: 2 },
-  { id: 'request-table', label: 'Request Table', visible: true, order: 3 },
+  { id: 'request-table', label: 'Request Table', visible: true, order: 1 },
 ];
 
-export function getDefaultWidgetsForRole(role: Role): DashboardWidget[] {
-  switch (role) {
-    case Role.REQUESTER:
-      return DEFAULT_WIDGETS.map((w) => ({
-        ...w,
-        visible: w.id === 'kpi-cards' || w.id === 'request-table',
-      }));
-    case Role.MANAGER:
-      return DEFAULT_WIDGETS.map((w) => ({
-        ...w,
-        visible: w.id !== 'performance',
-      }));
-    case Role.SPECIALIST:
-      return DEFAULT_WIDGETS.map((w) => ({
-        ...w,
-        visible: w.id !== 'analytics',
-      }));
-    case Role.TECHNICAL_REVIEWER:
-      return DEFAULT_WIDGETS.map((w) => ({
-        ...w,
-        visible: w.id === 'kpi-cards' || w.id === 'request-table',
-      }));
-    case Role.POC:
-    case Role.ADMIN:
-    default:
-      return DEFAULT_WIDGETS.map((w) => ({ ...w }));
-  }
+export function getDefaultWidgetsForRole(_role: Role): DashboardWidget[] {
+  return DEFAULT_WIDGETS.map((w) => ({ ...w }));
 }
 
 export const useLayoutStore = create<LayoutState>()(
@@ -104,11 +77,14 @@ export const useLayoutStore = create<LayoutState>()(
       merge: (persisted, current) => {
         const persistedState = persisted as Partial<LayoutState> | undefined;
         if (!persistedState?.widgets) return { ...current, ...persistedState };
-        const existingIds = new Set(persistedState.widgets.map((w) => w.id));
+        const validIds = new Set(DEFAULT_WIDGETS.map((w) => w.id));
+        // Remove old widgets (analytics, performance) that no longer exist
+        const cleaned = persistedState.widgets.filter((w) => validIds.has(w.id));
+        const existingIds = new Set(cleaned.map((w) => w.id));
         const missingWidgets = DEFAULT_WIDGETS.filter((w) => !existingIds.has(w.id));
-        const maxOrder = Math.max(...persistedState.widgets.map((w) => w.order), -1);
+        const maxOrder = Math.max(...cleaned.map((w) => w.order), -1);
         const mergedWidgets = [
-          ...persistedState.widgets,
+          ...cleaned,
           ...missingWidgets.map((w, i) => ({ ...w, order: maxOrder + 1 + i })),
         ];
         return { ...current, ...persistedState, widgets: mergedWidgets };

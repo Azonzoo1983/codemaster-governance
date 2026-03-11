@@ -373,7 +373,7 @@ export const Dashboard: React.FC = () => {
       return true;
     });
     return {
-      active: all.filter(r => r.status !== RequestStatus.COMPLETED && r.status !== RequestStatus.REJECTED && r.status !== RequestStatus.CANCELLED).length,
+      active: all.filter(r => r.status !== RequestStatus.COMPLETED && r.status !== RequestStatus.CANCELLED).length,
       completed: all.filter(r => r.status === RequestStatus.COMPLETED).length,
       cancelled: all.filter(r => r.status === RequestStatus.CANCELLED).length,
       attention: all.filter(r => r.status === RequestStatus.REJECTED || r.status === RequestStatus.RETURNED_FOR_CLARIFICATION).length,
@@ -529,9 +529,8 @@ export const Dashboard: React.FC = () => {
           <FilterPresets
             currentFilters={{ statusFilter: activeTab, priorityFilter: filterPriority, classificationFilter: filterClassification, searchQuery }}
             onApplyPreset={(preset: FilterPreset) => {
-              if (preset.statusFilter === 'active' || preset.statusFilter === 'completed' || preset.statusFilter === 'all') {
-                setActiveTab(preset.statusFilter);
-              }
+              const tabMap: Record<string, 'active' | 'completed' | 'all'> = { active: 'active', completed: 'completed', all: 'all', attention: 'active' };
+              if (tabMap[preset.statusFilter]) setActiveTab(tabMap[preset.statusFilter]);
               setFilterPriority(preset.priorityFilter);
               setFilterClassification(preset.classificationFilter);
               setSearchQuery(preset.searchQuery);
@@ -771,7 +770,7 @@ export const Dashboard: React.FC = () => {
                           <div className="flex items-center gap-2">
                             <span className="font-medium text-slate-900 dark:text-slate-100 truncate max-w-[200px]">{req.title}</span>
                             {activeTab === 'completed' && req.oracleCode && (
-                              <span className="ml-2 font-mono text-xs bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 rounded cursor-pointer" onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(req.oracleCode!); }} title="Click to copy">
+                              <span className="ml-2 font-mono text-xs bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 rounded cursor-pointer" onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(req.oracleCode!).then(() => addToast('Copied Oracle Code', 'success')); }} title="Click to copy" role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); navigator.clipboard.writeText(req.oracleCode!).then(() => addToast('Copied Oracle Code', 'success')); } }}>
                                 {req.oracleCode}
                               </span>
                             )}
@@ -787,9 +786,9 @@ export const Dashboard: React.FC = () => {
                       {visibleColumns.has('status') && (
                         <td className="p-3">
                           <span className={`badge-refined ${getStatusColor(req.status)}`}>{req.status}</span>
-                          {req.status === RequestStatus.REJECTED && (
-                            <span className="block text-[10px] text-red-500 dark:text-red-400 mt-0.5 truncate max-w-[150px]" title={req.rejectionReason || ''}>
-                              {req.rejectionReason ? req.rejectionReason.slice(0, 40) + (req.rejectionReason.length > 40 ? '...' : '') : ''}
+                          {req.status === RequestStatus.REJECTED && req.rejectionReason && (
+                            <span className="block text-[10px] text-red-500 dark:text-red-400 mt-0.5 truncate max-w-[150px]" title={req.rejectionReason}>
+                              {req.rejectionReason.slice(0, 40)}{req.rejectionReason.length > 40 ? '...' : ''}
                             </span>
                           )}
                         </td>
