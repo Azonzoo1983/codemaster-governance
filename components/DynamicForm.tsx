@@ -136,8 +136,8 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({ attributes, values, on
                 disabled={readOnly}
                 aria-required={attr.mandatory || undefined}
                 aria-label={`${attr.name} value`}
-                value={values[attr.id] || ''}
-                onChange={(e) => handleChange(attr.id, e.target.value)}
+                value={values[attr.id] ?? ''}
+                onChange={(e) => handleChange(attr.id, e.target.value === '' ? '' : Number(e.target.value))}
                 className={getInputClasses(attr)}
               />
               {shouldHint && <RequiredHint />}
@@ -154,8 +154,8 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({ attributes, values, on
                   disabled={readOnly}
                   aria-required={attr.mandatory || undefined}
                   aria-label={`${attr.name} value`}
-                  value={values[attr.id]?.value || ''}
-                  onChange={(e) => handleChange(attr.id, { ...values[attr.id], value: e.target.value })}
+                  value={values[attr.id]?.value ?? ''}
+                  onChange={(e) => handleChange(attr.id, { ...values[attr.id], value: e.target.value === '' ? '' : Number(e.target.value) })}
                   className={getInputClasses(attr, 'flex-1')}
                 />
                 <select

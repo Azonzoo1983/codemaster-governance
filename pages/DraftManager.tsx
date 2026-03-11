@@ -73,7 +73,7 @@ const BulkSubmitModal: React.FC<BulkSubmitModalProps> = ({
     completeCount > 0;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Submit requests">
       <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-lg">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-slate-200 dark:border-slate-700">
@@ -285,6 +285,15 @@ export const DraftManager: React.FC = () => {
     if (filter === 'incomplete') return drafts.filter((d) => !completenessMap.get(d.id)?.complete);
     return drafts;
   }, [drafts, completenessMap, filter]);
+
+  // Prune stale selected IDs when the filtered list changes
+  const filteredIdSet = useMemo(() => new Set(filteredDrafts.map((d) => d.id)), [filteredDrafts]);
+  React.useEffect(() => {
+    setSelectedIds((prev) => {
+      const pruned = new Set([...prev].filter((id) => filteredIdSet.has(id)));
+      return pruned.size === prev.size ? prev : pruned;
+    });
+  }, [filteredIdSet]);
 
   const allSelected = filteredDrafts.length > 0 && selectedIds.size === filteredDrafts.length;
   const someSelected = selectedIds.size > 0;

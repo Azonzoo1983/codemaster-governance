@@ -464,8 +464,12 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ onClose }) => {
         unspscCode: row.unspscCode || '',
       };
 
-      addRequest(newReq);
-      count++;
+      try {
+        addRequest(newReq);
+        count++;
+      } catch {
+        // addRequest uses optimistic update with rollback; failures surface via toast
+      }
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
 
@@ -594,7 +598,7 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ onClose }) => {
                           const hasErrors = row.errors.length > 0;
                           return (
                             <tr
-                              key={idx}
+                              key={`${row.sourceSheet}-${idx}`}
                               className={hasErrors ? 'bg-red-50/50 dark:bg-red-900/10' : ''}
                             >
                               <td className="px-3 py-2 text-slate-500">{idx + 1}</td>

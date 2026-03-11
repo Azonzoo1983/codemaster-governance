@@ -19,6 +19,9 @@ export const useBrandStore = create<BrandState>((set, get) => ({
 
   addBrand: (name) => {
     const addToast = useToastStore.getState().addToast;
+    // Prevent duplicate brands (case-insensitive)
+    const exists = get().brands.some((b) => b.name.toLowerCase() === name.toLowerCase());
+    if (exists) return;
     const newBrand: Brand = { id: generateId('BRD'), name, active: true };
     set((state) => ({ brands: [...state.brands, newBrand] }));
     upsertRecord(TABLES.brands, newBrand).then((result) => {
