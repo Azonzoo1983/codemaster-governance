@@ -5,12 +5,10 @@ import { RequestStatus, Role, RequestItem, Classification } from '../types';
 import { calculateBusinessHours } from '../lib/businessHours';
 import { useToastStore } from '../stores';
 import { useTableKeyboardNav } from '../hooks/useTableKeyboardNav';
-import { Clock, CheckCircle, AlertCircle, FileText, ArrowRight, RotateCcw, Filter, Search, ChevronLeft, ChevronRight, ArrowUpDown, AlertTriangle, UserPlus, XCircle, Columns, TrendingUp, Users as UsersIcon, BarChart2, ChevronDown, ChevronUp, FileSpreadsheet, LayoutGrid, FileDown, Award, List, Grid3X3, Play } from 'lucide-react';
+import { Clock, CheckCircle, AlertCircle, FileText, ArrowRight, RotateCcw, Filter, Search, ChevronLeft, ChevronRight, ArrowUpDown, AlertTriangle, UserPlus, XCircle, Columns, Users as UsersIcon, BarChart2, FileSpreadsheet, LayoutGrid, FileDown, List, Grid3X3, Play } from 'lucide-react';
 import { exportRequestsToExcel } from '../lib/exportExcel';
 import { exportBatchPdf } from '../lib/exportBatchPdf';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, ResponsiveContainer, LineChart, Line, Area, AreaChart } from 'recharts';
 import { DashboardLayoutEditor } from '../components/DashboardLayoutEditor';
-import { PerformanceMetrics } from '../components/PerformanceMetrics';
 import { SLACountdown } from '../components/SLACountdown';
 import { WelcomeCard } from '../components/WelcomeCard';
 import { EmptyState } from '../components/EmptyState';
@@ -20,7 +18,6 @@ import { BulkUpload } from '../components/BulkUpload';
 
 const PAGE_SIZE_OPTIONS = [15, 25, 50, 100] as const;
 const PAGE_SIZE_KEY = 'cm-dashboard-page-size';
-const ANALYTICS_COLORS = ['#2563eb', '#f59e0b', '#ef4444', '#10b981', '#8b5cf6'];
 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -29,7 +26,7 @@ export const Dashboard: React.FC = () => {
   const priorities = useAdminStore((s) => s.priorities);
   const attributes = useAdminStore((s) => s.attributes);
   const users = useUserStore((s) => s.users);
-  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [activeTab, setActiveTab] = useState<'active' | 'completed' | 'all'>('active');
   const [filterPriority, setFilterPriority] = useState<string>('all');
   const [filterClassification, setFilterClassification] = useState<string>('all');
   const [filterProject, setFilterProject] = useState<string>('all');
@@ -44,8 +41,6 @@ export const Dashboard: React.FC = () => {
   const updateRequestStatus = useRequestStore((s) => s.updateRequestStatus);
   const updateRequest = useRequestStore((s) => s.updateRequest);
   const addToast = useToastStore((s) => s.addToast);
-  const [showAnalytics, setShowAnalytics] = useState(false);
-  const [showPerformance, setShowPerformance] = useState(false);
   const [showBulkUpload, setShowBulkUpload] = useState(false);
   const [showLayoutEditor, setShowLayoutEditor] = useState(false);
   const [welcomeDismissed, setWelcomeDismissed] = useState(() => localStorage.getItem('cm-welcome-dismissed') === 'true');
@@ -239,10 +234,13 @@ export const Dashboard: React.FC = () => {
         if (!r.id.toLowerCase().includes(q) && !r.title.toLowerCase().includes(q) && !(r.project || '').toLowerCase().includes(q)) return false;
       }
 
-      // Status filter
-      if (filterStatus === 'active' && (r.status === RequestStatus.COMPLETED || r.status === RequestStatus.REJECTED || r.status === RequestStatus.CANCELLED)) return false;
-      if (filterStatus === 'completed' && r.status !== RequestStatus.COMPLETED) return false;
-      if (filterStatus === 'attention' && r.status !== RequestStatus.REJECTED && r.status !== RequestStatus.RETURNED_FOR_CLARIFICATION) return false;
+      // Tab-level filtering
+      if (activeTab === 'active') {
+        if (r.status === RequestStatus.COMPLETED || r.status === RequestStatus.CANCELLED) return false;
+      } else if (activeTab === 'completed') {
+        if (r.status !== RequestStatus.COMPLETED) return false;
+      }
+      // 'all' tab shows everything
 
       // Priority filter
       if (filterPriority !== 'all' && r.priorityId !== filterPriority) return false;
@@ -255,7 +253,7 @@ export const Dashboard: React.FC = () => {
 
       return true;
     });
-  }, [requests, currentUser, filterStatus, filterPriority, filterClassification, filterProject, searchQuery]);
+  }, [requests, currentUser, activeTab, filterPriority, filterClassification, filterProject, searchQuery]);
 
   // Sorting
   const sortedRequests = useMemo(() => {
@@ -290,7 +288,7 @@ export const Dashboard: React.FC = () => {
   };
 
   // Reset page when filters change
-  useEffect(() => { setPage(1); }, [filterStatus, filterPriority, filterClassification, filterProject, searchQuery]);
+  useEffect(() => { setPage(1); }, [activeTab, filterPriority, filterClassification, filterProject, searchQuery]);
 
   // Keyboard navigation for table
   const tbodyRef = useRef<HTMLTableSectionElement>(null);
@@ -318,7 +316,7 @@ export const Dashboard: React.FC = () => {
   });
 
   // Reset focused index when page, filters, or search change
-  useEffect(() => { setFocusedIndex(-1); }, [page, filterStatus, filterPriority, filterClassification, filterProject, searchQuery]);
+  useEffect(() => { setFocusedIndex(-1); }, [page, activeTab, filterPriority, filterClassification, filterProject, searchQuery]);
 
   const getStatusColor = (status: RequestStatus) => {
     switch (status) {
@@ -388,64 +386,6 @@ export const Dashboard: React.FC = () => {
       }).length,
     };
   }, [requests, currentUser, priorities]);
-
-  // Analytics: Requests trend over last 30 days
-  const trendData = useMemo(() => {
-    const days = 30;
-    const now = new Date();
-    const data = [];
-    for (let i = days - 1; i >= 0; i--) {
-      const date = new Date(now);
-      date.setDate(date.getDate() - i);
-      const dateStr = date.toISOString().slice(0, 10);
-      const count = requests.filter(r => r.createdAt.slice(0, 10) === dateStr).length;
-      data.push({ date: date.toLocaleDateString('en', { month: 'short', day: 'numeric' }), count });
-    }
-    return data;
-  }, [requests]);
-
-  // Analytics: Workload by specialist
-  const workloadData = useMemo(() => {
-    const specs = users.filter(u => u.role === Role.SPECIALIST);
-    return specs.map(s => ({
-      name: s.name.split(' ')[0],
-      active: requests.filter(r => r.assignedSpecialistId === s.id && r.status !== RequestStatus.COMPLETED && r.status !== RequestStatus.REJECTED && r.status !== RequestStatus.CANCELLED).length,
-    })).filter(s => s.active > 0);
-  }, [requests, users]);
-
-  // Analytics: Priority distribution
-  const priorityDistData = useMemo(() => {
-    const counts: Record<string, number> = {};
-    requests.forEach(r => {
-      const pName = priorities.find(p => p.id === r.priorityId)?.name || 'Unknown';
-      counts[pName] = (counts[pName] || 0) + 1;
-    });
-    return Object.entries(counts).map(([name, value]) => ({ name, value }));
-  }, [requests, priorities]);
-
-  // Coding Performance Metrics
-  const performanceMetrics = useMemo(() => {
-    const completed = requests.filter(r => r.status === RequestStatus.COMPLETED);
-    if (completed.length === 0) return { avgTime: 'N/A', slaRate: 'N/A' };
-
-    const avgHours = completed.reduce((sum, r) => {
-      const created = new Date(r.createdAt).getTime();
-      const updated = new Date(r.updatedAt).getTime();
-      return sum + (updated - created) / (1000 * 60 * 60);
-    }, 0) / completed.length;
-
-    const onTime = completed.filter(r => {
-      const prio = priorities.find(p => p.id === r.priorityId);
-      if (!prio?.slaHours) return true;
-      const hours = (new Date(r.updatedAt).getTime() - new Date(r.createdAt).getTime()) / (1000 * 60 * 60);
-      return hours <= prio.slaHours;
-    }).length;
-
-    return {
-      avgTime: avgHours < 24 ? `${Math.round(avgHours)}h` : `${Math.round(avgHours / 24)}d`,
-      slaRate: `${Math.round((onTime / completed.length) * 100)}%`,
-    };
-  }, [requests, priorities]);
 
   const userRequestCount = useMemo(() => {
     if (currentUser.role === Role.REQUESTER) return requests.filter(r => r.requesterId === currentUser.id).length;
@@ -562,167 +502,36 @@ export const Dashboard: React.FC = () => {
           );
         }
 
-        if (widget.id === 'analytics') {
-          return (
-            <React.Fragment key={widget.id}>
-              {/* Analytics Toggle */}
-              <div className="flex items-center">
-                <button
-                  onClick={() => setShowAnalytics(!showAnalytics)}
-                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200/60 dark:border-slate-700/60 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-                  aria-expanded={showAnalytics}
-                  aria-controls="analytics-panel"
-                >
-                  <BarChart2 size={16} />
-                  Analytics
-                  {showAnalytics ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                </button>
-              </div>
-
-              {/* Analytics Widgets */}
-              {showAnalytics && (
-                <div id="analytics-panel" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-fadeIn">
-                  {/* Widget 1: Requests Over Time */}
-                  <div className="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-premium border border-slate-200/60 dark:border-slate-700/60">
-                    <div className="flex items-center gap-2 mb-4">
-                      <TrendingUp size={16} className="text-blue-600 dark:text-blue-400" />
-                      <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Requests Trend (30 days)</h3>
-                    </div>
-                    <ResponsiveContainer width="100%" height={200}>
-                      <AreaChart data={trendData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                        <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#94a3b8' }} interval="preserveStartEnd" />
-                        <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} allowDecimals={false} />
-                        <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '8px', color: '#f1f5f9', fontSize: '12px' }} />
-                        <Area type="monotone" dataKey="count" stroke="#2563eb" fill="#2563eb" fillOpacity={0.15} strokeWidth={2} />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  </div>
-
-                  {/* Widget 2: Specialist Workload */}
-                  <div className="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-premium border border-slate-200/60 dark:border-slate-700/60">
-                    <div className="flex items-center gap-2 mb-4">
-                      <UsersIcon size={16} className="text-blue-600 dark:text-blue-400" />
-                      <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Specialist Workload</h3>
-                    </div>
-                    {workloadData.length > 0 ? (
-                      <ResponsiveContainer width="100%" height={200}>
-                        <BarChart data={workloadData} layout="vertical" margin={{ left: 10 }}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                          <XAxis type="number" tick={{ fontSize: 10, fill: '#94a3b8' }} allowDecimals={false} />
-                          <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: '#94a3b8' }} width={60} />
-                          <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '8px', color: '#f1f5f9', fontSize: '12px' }} />
-                          <Bar dataKey="active" fill="#2563eb" radius={[0, 4, 4, 0]} barSize={20} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <div className="flex items-center justify-center h-[200px] text-slate-400 dark:text-slate-500 text-sm">
-                        No active specialist assignments
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Widget 3: Priority Distribution */}
-                  <div className="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-premium border border-slate-200/60 dark:border-slate-700/60">
-                    <div className="flex items-center gap-2 mb-4">
-                      <BarChart2 size={16} className="text-blue-600 dark:text-blue-400" />
-                      <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">By Priority</h3>
-                    </div>
-                    {priorityDistData.length > 0 ? (
-                      <ResponsiveContainer width="100%" height={200}>
-                        <PieChart>
-                          <Pie
-                            data={priorityDistData}
-                            cx="50%"
-                            cy="50%"
-                            outerRadius={70}
-                            innerRadius={35}
-                            dataKey="value"
-                            label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                            labelLine={false}
-                            fontSize={10}
-                          >
-                            {priorityDistData.map((_, index) => (
-                              <Cell key={`cell-${index}`} fill={ANALYTICS_COLORS[index % ANALYTICS_COLORS.length]} />
-                            ))}
-                          </Pie>
-                          <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '8px', color: '#f1f5f9', fontSize: '12px' }} />
-                        </PieChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <div className="flex items-center justify-center h-[200px] text-slate-400 dark:text-slate-500 text-sm">
-                        No request data available
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Widget 4: Coding Performance */}
-                  <div className="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-premium border border-slate-200/60 dark:border-slate-700/60">
-                    <div className="flex items-center gap-2 mb-4">
-                      <Award size={16} className="text-purple-500" />
-                      <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Coding Performance</h3>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <div className="text-2xl font-bold text-slate-800 dark:text-slate-200">
-                          {performanceMetrics.avgTime}
-                        </div>
-                        <div className="text-xs text-slate-500 dark:text-slate-400">Avg. Completion Time</div>
-                      </div>
-                      <div>
-                        <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-                          {performanceMetrics.slaRate}
-                        </div>
-                        <div className="text-xs text-slate-500 dark:text-slate-400">SLA Compliance</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </React.Fragment>
-          );
-        }
-
-        if (widget.id === 'performance') {
-          // Only show for Admin and POC roles
-          if (currentUser.role !== Role.ADMIN && currentUser.role !== Role.POC) return null;
-          return (
-            <React.Fragment key={widget.id}>
-              {/* Specialist Performance Toggle */}
-              <div className="flex items-center">
-                <button
-                  onClick={() => setShowPerformance(!showPerformance)}
-                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200/60 dark:border-slate-700/60 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-                  aria-expanded={showPerformance}
-                  aria-controls="performance-panel"
-                >
-                  <Award size={16} className="text-amber-500" />
-                  Specialist Performance
-                  {showPerformance ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                </button>
-              </div>
-
-              {/* Performance Metrics Panel */}
-              {showPerformance && (
-                <div id="performance-panel" className="animate-fadeIn">
-                  <PerformanceMetrics requests={requests} users={users} />
-                </div>
-              )}
-            </React.Fragment>
-          );
-        }
-
         if (widget.id === 'request-table') {
           return (
             <React.Fragment key={widget.id}>
+      {/* Tabs */}
+      <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg mb-4">
+        {(['active', 'completed', 'all'] as const).map(tab => (
+          <button
+            key={tab}
+            onClick={() => { setActiveTab(tab); setPage(1); }}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+              activeTab === tab
+                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+            }`}
+          >
+            {tab === 'active' ? 'Active' : tab === 'completed' ? 'Completed' : 'All'}
+          </button>
+        ))}
+      </div>
+
       {/* Request Table */}
       <div className="bg-white dark:bg-slate-800 rounded-xl shadow-premium border border-slate-200/60 dark:border-slate-700/60 overflow-hidden">
         {/* Filter Presets */}
         <div className="px-4 pt-4">
           <FilterPresets
-            currentFilters={{ statusFilter: filterStatus, priorityFilter: filterPriority, classificationFilter: filterClassification, searchQuery }}
+            currentFilters={{ statusFilter: activeTab, priorityFilter: filterPriority, classificationFilter: filterClassification, searchQuery }}
             onApplyPreset={(preset: FilterPreset) => {
-              setFilterStatus(preset.statusFilter);
+              if (preset.statusFilter === 'active' || preset.statusFilter === 'completed' || preset.statusFilter === 'all') {
+                setActiveTab(preset.statusFilter);
+              }
               setFilterPriority(preset.priorityFilter);
               setFilterClassification(preset.classificationFilter);
               setSearchQuery(preset.searchQuery);
@@ -767,12 +576,6 @@ export const Dashboard: React.FC = () => {
 
             <div className="flex items-center gap-2 flex-wrap">
               <Filter size={14} className="text-slate-400" />
-              <select className="text-sm border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-md shadow-sm py-2 px-3" value={filterStatus} onChange={e => setFilterStatus(e.target.value)} aria-label="Filter by status">
-                <option value="all">All Status</option>
-                <option value="active">Active</option>
-                <option value="attention">Needs Attention</option>
-                <option value="completed">Completed</option>
-              </select>
               <select className="text-sm border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-md shadow-sm py-2 px-3" value={filterPriority} onChange={e => setFilterPriority(e.target.value)} aria-label="Filter by priority">
                 <option value="all">All Priority</option>
                 {priorities.filter(p => p.active).map(p => (
@@ -903,9 +706,9 @@ export const Dashboard: React.FC = () => {
                   <EmptyState
                     icon={<FileText size={40} />}
                     title="No requests found"
-                    description={searchQuery || filterStatus !== 'all' ? 'Try adjusting your filters or search terms.' : 'Create a new request to get started.'}
-                    actionLabel={!searchQuery && filterStatus === 'all' && (currentUser.role === Role.REQUESTER || currentUser.role === Role.ADMIN) ? 'Create Request' : undefined}
-                    onAction={!searchQuery && filterStatus === 'all' ? () => navigate('/requests/new') : undefined}
+                    description={searchQuery || activeTab !== 'active' ? 'Try adjusting your filters or search terms.' : 'Create a new request to get started.'}
+                    actionLabel={!searchQuery && activeTab === 'active' && (currentUser.role === Role.REQUESTER || currentUser.role === Role.ADMIN) ? 'Create Request' : undefined}
+                    onAction={!searchQuery && activeTab === 'active' ? () => navigate('/requests/new') : undefined}
                     size="sm"
                   />
                 </td></tr>
@@ -920,7 +723,7 @@ export const Dashboard: React.FC = () => {
                     <tr
                       key={req.id}
                       data-row-index={rowIdx}
-                      className={`table-row-hover outline-none ${isRowFocused ? 'ring-2 ring-blue-500 dark:ring-blue-400 bg-blue-50/50 dark:bg-blue-900/20' : ''}`}
+                      className={`table-row-hover outline-none ${req.status === RequestStatus.CANCELLED ? 'opacity-50' : ''} ${isRowFocused ? 'ring-2 ring-blue-500 dark:ring-blue-400 bg-blue-50/50 dark:bg-blue-900/20' : ''}`}
                       tabIndex={isRowFocused ? 0 : -1}
                       role="link"
                       aria-label={`Request ${req.id}: ${req.title}, status ${req.status}`}
@@ -967,6 +770,11 @@ export const Dashboard: React.FC = () => {
                         <td className="p-3">
                           <div className="flex items-center gap-2">
                             <span className="font-medium text-slate-900 dark:text-slate-100 truncate max-w-[200px]">{req.title}</span>
+                            {activeTab === 'completed' && req.oracleCode && (
+                              <span className="ml-2 font-mono text-xs bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 rounded cursor-pointer" onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(req.oracleCode!); }} title="Click to copy">
+                                {req.oracleCode}
+                              </span>
+                            )}
                             <SLACountdown request={req} priority={reqPriority} />
                           </div>
                         </td>
@@ -979,6 +787,11 @@ export const Dashboard: React.FC = () => {
                       {visibleColumns.has('status') && (
                         <td className="p-3">
                           <span className={`badge-refined ${getStatusColor(req.status)}`}>{req.status}</span>
+                          {req.status === RequestStatus.REJECTED && (
+                            <span className="block text-[10px] text-red-500 dark:text-red-400 mt-0.5 truncate max-w-[150px]" title={req.rejectionReason || ''}>
+                              {req.rejectionReason ? req.rejectionReason.slice(0, 40) + (req.rejectionReason.length > 40 ? '...' : '') : ''}
+                            </span>
+                          )}
                         </td>
                       )}
                       {visibleColumns.has('specialist') && (
@@ -1014,7 +827,7 @@ export const Dashboard: React.FC = () => {
               <EmptyState
                 icon={<FileText size={40} />}
                 title="No requests found"
-                description={searchQuery || filterStatus !== "all" ? "Try adjusting your filters or search terms." : "Create a new request to get started."}
+                description={searchQuery || activeTab !== "active" ? "Try adjusting your filters or search terms." : "Create a new request to get started."}
                 size="sm"
               />
             ) : (
