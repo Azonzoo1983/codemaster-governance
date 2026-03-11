@@ -7,7 +7,7 @@ import { useRequestStore } from '../stores/requestStore';
 import { RequestStatus, Classification } from '../types';
 import { useNavigate } from 'react-router-dom';
 
-const PAGE_SIZE = Number(localStorage.getItem('cm-catalog-page-size')) || 24;
+const PAGE_SIZE = (() => { try { return Number(localStorage.getItem('cm-catalog-page-size')) || 24; } catch { return 24; } })();
 
 export const CodeCatalog: React.FC = () => {
   const navigate = useNavigate();
@@ -57,10 +57,10 @@ export const CodeCatalog: React.FC = () => {
 
     result.sort((a, b) => {
       let cmp = 0;
-      if (sortField === 'date') cmp = new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+      if (sortField === 'date') cmp = new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime();
       if (sortField === 'code') cmp = (a.oracleCode || '').localeCompare(b.oracleCode || '');
       if (sortField === 'description') cmp = (a.finalDescription || a.generatedDescription || '').localeCompare(b.finalDescription || b.generatedDescription || '');
-      return sortDir === 'desc' ? cmp : -cmp;
+      return sortDir === 'desc' ? -cmp : cmp;
     });
 
     return result;
@@ -81,7 +81,7 @@ export const CodeCatalog: React.FC = () => {
     navigator.clipboard.writeText(code).then(() => {
       setCopiedId(id);
       setTimeout(() => setCopiedId(null), 2000);
-    });
+    }).catch(() => { /* clipboard unavailable */ });
   };
 
   const formatDate = (dateStr: string) => {
@@ -152,6 +152,7 @@ export const CodeCatalog: React.FC = () => {
           value={searchQuery}
           onChange={e => setSearchQuery(e.target.value)}
           placeholder="Search by code, description, brand, attributes..."
+          aria-label="Search codes"
           className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
         />
       </div>
@@ -161,6 +162,7 @@ export const CodeCatalog: React.FC = () => {
         <select
           value={filterClassification}
           onChange={e => setFilterClassification(e.target.value)}
+          aria-label="Filter by classification"
           className="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
         >
           <option value="all">All Classifications</option>
@@ -171,6 +173,7 @@ export const CodeCatalog: React.FC = () => {
         <select
           value={filterProject}
           onChange={e => setFilterProject(e.target.value)}
+          aria-label="Filter by project"
           className="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
         >
           <option value="all">All Projects</option>
@@ -295,7 +298,7 @@ export const CodeCatalog: React.FC = () => {
                       <span className="font-mono font-semibold text-blue-600 dark:text-blue-400">{r.oracleCode}</span>
                       <button
                         onClick={() => handleCopy(r.oracleCode!, r.id)}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                        className="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
                         title="Copy code"
                       >
                         {copiedId === r.id ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
