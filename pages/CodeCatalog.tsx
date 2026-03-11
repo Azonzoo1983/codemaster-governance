@@ -1,11 +1,12 @@
 import React, { useState, useMemo } from 'react';
 import {
   BookOpen, Search, Copy, Check, Grid3X3, List,
-  ExternalLink, ChevronLeft, ChevronRight
+  ExternalLink, ChevronLeft, ChevronRight, Download, FileSpreadsheet
 } from 'lucide-react';
 import { useRequestStore } from '../stores/requestStore';
-import { RequestStatus, Classification } from '../types';
+import { RequestStatus, Classification, type RequestItem } from '../types';
 import { useNavigate } from 'react-router-dom';
+import { exportToCsv } from '../lib/exportCsv';
 
 const PAGE_SIZE = (() => { try { return Number(localStorage.getItem('cm-catalog-page-size')) || 24; } catch { return 24; } })();
 
@@ -84,6 +85,32 @@ export const CodeCatalog: React.FC = () => {
     }).catch(() => { /* clipboard unavailable */ });
   };
 
+  const catalogRow = (r: RequestItem) => ({
+    'Oracle Code': r.oracleCode || '',
+    'Description': r.finalDescription || r.generatedDescription || '',
+    'Classification': r.classification || '',
+    'Sub-Type': r.materialSubType || r.serviceSubType || '',
+    'UNSPSC Code': r.unspscCode || '',
+    'Project': r.project || '',
+    'Brand': r.attributes?.Brand || r.attributes?.brand || '',
+    'Completed': formatDate(r.updatedAt),
+  });
+
+  const handleExportCsv = () => {
+    exportToCsv(filtered.map(catalogRow), `code-catalog-${new Date().toISOString().slice(0, 10)}`);
+  };
+
+  const handleExportExcel = async () => {
+    const XLSX = await import('xlsx');
+    const ws = XLSX.utils.json_to_sheet(filtered.map(catalogRow));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Code Catalog');
+    // Auto-width columns
+    const cols = Object.keys(catalogRow(filtered[0] || {} as RequestItem));
+    ws['!cols'] = cols.map(key => ({ wch: Math.max(key.length, 15) }));
+    XLSX.writeFile(wb, `code-catalog-${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
   const formatDate = (dateStr: string) => {
     try {
       return new Date(dateStr).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
@@ -117,6 +144,24 @@ export const CodeCatalog: React.FC = () => {
               {completedRequests.length} Oracle code{completedRequests.length !== 1 ? 's' : ''} in database
             </p>
           </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleExportCsv}
+            disabled={filtered.length === 0}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
+            aria-label="Export catalog as CSV"
+          >
+            <Download size={14} strokeWidth={1.75} /> CSV
+          </button>
+          <button
+            onClick={handleExportExcel}
+            disabled={filtered.length === 0}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
+            aria-label="Export catalog as Excel"
+          >
+            <FileSpreadsheet size={14} strokeWidth={1.75} /> Excel
+          </button>
         </div>
         <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 rounded-lg p-1">
           <button
