@@ -106,7 +106,7 @@ export const Layout: React.FC = () => {
         ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
       `}>
         <div className="p-6 border-b border-slate-700/50">
-          <img src="/nass-logo.png" alt="Nass Corporation" className="h-12 w-auto mb-3 brightness-0 invert opacity-80" />
+          <img src="/nass-logo.png" alt="Nass Corporation" className="h-12 w-auto mb-3 brightness-0 invert opacity-80 -ml-[31px]" />
           <h1 className="text-2xl font-bold tracking-tight text-white">CodeMaster</h1>
           <p className="text-slate-400 text-[10px] mt-1 uppercase tracking-widest font-medium">Governance Tool</p>
         </div>
