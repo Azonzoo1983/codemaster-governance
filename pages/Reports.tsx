@@ -1,10 +1,9 @@
 import React, { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useRequestStore, useAdminStore, useUserStore } from '../stores';
 import { RequestStatus, Role } from '../types';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, ResponsiveContainer, AreaChart, Area, LineChart, Line } from 'recharts';
 import { calculateBusinessHours } from '../lib/businessHours';
-import { ArrowLeft, TrendingUp, Users, Clock, Target, Download, FileText, Calendar, FileSpreadsheet, FileDown } from 'lucide-react';
+import { TrendingUp, Users, Clock, Target, Download, FileText, Calendar, FileSpreadsheet, FileDown, AlertTriangle } from 'lucide-react';
 import { exportToCsv } from '../lib/exportCsv';
 import { exportToPdf } from '../lib/exportPdf';
 import { exportRequestsToExcel } from '../lib/exportExcel';
@@ -13,7 +12,6 @@ import { exportAuditTrailPdf } from '../lib/exportBatchPdf';
 const COLORS = ['#2563eb', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316', '#84cc16'];
 
 export const Reports: React.FC = () => {
-  const navigate = useNavigate();
   const allRequests = useRequestStore((s) => s.requests);
   const priorities = useAdminStore((s) => s.priorities);
   const users = useUserStore((s) => s.users);
@@ -21,16 +19,31 @@ export const Reports: React.FC = () => {
   // Date range filter
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [filterDept, setFilterDept] = useState('All');
+
+  const departments = useMemo(() => {
+    const depts = new Set(users.map(u => u.department).filter(Boolean));
+    return ['All', ...Array.from(depts).sort()];
+  }, [users]);
 
   const requests = useMemo(() => {
-    if (!dateFrom && !dateTo) return allRequests;
-    return allRequests.filter((r) => {
-      const d = new Date(r.createdAt);
-      if (dateFrom && d < new Date(dateFrom)) return false;
-      if (dateTo && d > new Date(dateTo + 'T23:59:59')) return false;
-      return true;
-    });
-  }, [allRequests, dateFrom, dateTo]);
+    let filtered = allRequests;
+    if (dateFrom || dateTo) {
+      filtered = filtered.filter((r) => {
+        const d = new Date(r.createdAt);
+        if (dateFrom && d < new Date(dateFrom)) return false;
+        if (dateTo && d > new Date(dateTo + 'T23:59:59')) return false;
+        return true;
+      });
+    }
+    if (filterDept !== 'All') {
+      filtered = filtered.filter(r => {
+        const user = users.find(u => u.id === r.requesterId);
+        return user?.department === filterDept;
+      });
+    }
+    return filtered;
+  }, [allRequests, dateFrom, dateTo, filterDept, users]);
 
   // Export handlers
   const handleExportCsv = () => {
@@ -170,11 +183,72 @@ export const Reports: React.FC = () => {
     return Object.entries(counts).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
   }, [requests, users]);
 
+  // Requests Trend (30 days)
+  const trendData = useMemo(() => {
+    const days = 30;
+    const now = new Date();
+    const data: { date: string; count: number }[] = [];
+    for (let i = days - 1; i >= 0; i--) {
+      const date = new Date(now);
+      date.setDate(date.getDate() - i);
+      const dateStr = date.toISOString().slice(0, 10);
+      const count = requests.filter(r => r.createdAt.slice(0, 10) === dateStr).length;
+      data.push({ date: date.toLocaleDateString('en', { month: 'short', day: 'numeric' }), count });
+    }
+    return data;
+  }, [requests]);
+
+  // Specialist Workload
+  const workloadData = useMemo(() => {
+    const specs = users.filter(u => u.role === Role.SPECIALIST);
+    return specs.map(s => ({
+      name: s.name.split(' ')[0],
+      active: requests.filter(r => r.assignedSpecialistId === s.id && r.status !== RequestStatus.COMPLETED && r.status !== RequestStatus.REJECTED && r.status !== RequestStatus.CANCELLED).length,
+    })).filter(s => s.active > 0);
+  }, [requests, users]);
+
+  // Rejection Analytics
+  const rejectionData = useMemo(() => {
+    const rejected = requests.filter(r => r.status === RequestStatus.REJECTED);
+
+    const byDept: Record<string, number> = {};
+    rejected.forEach(r => {
+      const user = users.find(u => u.id === r.requesterId);
+      const dept = user?.department || 'Unknown';
+      byDept[dept] = (byDept[dept] || 0) + 1;
+    });
+    const byDepartment = Object.entries(byDept).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
+
+    const byUser: Record<string, number> = {};
+    rejected.forEach(r => {
+      const user = users.find(u => u.id === r.requesterId);
+      const name = user?.name || r.requesterId;
+      byUser[name] = (byUser[name] || 0) + 1;
+    });
+    const byRequester = Object.entries(byUser).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
+
+    const byReason: Record<string, number> = {};
+    rejected.forEach(r => {
+      const reason = r.rejectionReason?.slice(0, 50) || 'No reason given';
+      byReason[reason] = (byReason[reason] || 0) + 1;
+    });
+    const reasons = Object.entries(byReason).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
+
+    const trend: Record<string, number> = {};
+    rejected.forEach(r => {
+      const d = new Date(r.createdAt);
+      const key = d.toLocaleDateString('en', { month: 'short', year: '2-digit' });
+      trend[key] = (trend[key] || 0) + 1;
+    });
+    const trendArr = Object.entries(trend).map(([month, count]) => ({ month, count }));
+
+    return { byDepartment, byRequester, reasons, trend: trendArr, total: rejected.length };
+  }, [requests, users]);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center gap-4">
         <div className="flex items-center gap-4 flex-1">
-          <button onClick={() => navigate('/')} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full transition"><ArrowLeft size={20} strokeWidth={1.75} /></button>
           <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100 tracking-tight">Performance Reports</h2>
         </div>
         <div className="flex items-center gap-2">
@@ -240,7 +314,15 @@ export const Reports: React.FC = () => {
             </button>
           )}
         </div>
-        {(dateFrom || dateTo) && (
+        <select
+          value={filterDept}
+          onChange={(e) => setFilterDept(e.target.value)}
+          className="px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-blue-500/20 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 transition"
+          aria-label="Filter by department"
+        >
+          {departments.map(d => <option key={d} value={d}>{d === 'All' ? 'All Departments' : d}</option>)}
+        </select>
+        {(dateFrom || dateTo || filterDept !== 'All') && (
           <span className="text-xs text-slate-500 dark:text-slate-400">
             Showing {requests.length} of {allRequests.length} requests
           </span>
@@ -265,6 +347,24 @@ export const Reports: React.FC = () => {
         <div className="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-premium border border-slate-200/60 dark:border-slate-700/60" role="status" aria-label={`Active Specialists: ${specialistData.length}`}>
           <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 text-xs font-semibold uppercase tracking-wide mb-2"><Users size={16} strokeWidth={1.75} /> Active Specialists</div>
           <p className="text-3xl font-bold text-blue-600 dark:text-blue-400">{specialistData.length}</p>
+        </div>
+      </div>
+
+      {/* Requests Trend (30 Days) */}
+      <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-premium border border-slate-200/60 dark:border-slate-700/60">
+        <h3 className="font-bold text-slate-800 dark:text-slate-100 mb-4 flex items-center gap-2">
+          <TrendingUp size={18} /> Requests Trend (30 Days)
+        </h3>
+        <div className="h-64">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={trendData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+              <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#94a3b8' }} interval="preserveStartEnd" />
+              <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} allowDecimals={false} />
+              <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '8px', color: '#f1f5f9', fontSize: '12px' }} />
+              <Area type="monotone" dataKey="count" stroke="#2563eb" fill="#2563eb" fillOpacity={0.15} strokeWidth={2} />
+            </AreaChart>
+          </ResponsiveContainer>
         </div>
       </div>
 
@@ -341,6 +441,28 @@ export const Reports: React.FC = () => {
               </ResponsiveContainer>
             </div>
           ) : <div className="h-64 flex items-center justify-center text-slate-400 italic">No completed requests to analyze yet.</div>}
+        </div>
+
+        {/* Specialist Workload */}
+        <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-premium border border-slate-200/60 dark:border-slate-700/60">
+          <h3 className="font-bold text-slate-800 dark:text-slate-100 mb-4 flex items-center gap-2">
+            <Users size={18} /> Specialist Workload
+          </h3>
+          {workloadData.length > 0 ? (
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={workloadData} layout="vertical" margin={{ left: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis type="number" tick={{ fontSize: 10, fill: '#94a3b8' }} allowDecimals={false} />
+                  <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: '#94a3b8' }} width={80} />
+                  <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '8px', color: '#f1f5f9', fontSize: '12px' }} />
+                  <Bar dataKey="active" fill="#2563eb" radius={[0, 4, 4, 0]} barSize={20} name="Active Requests" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="h-64 flex items-center justify-center text-slate-400 italic">No active specialist assignments</div>
+          )}
         </div>
       </div>
 
@@ -445,6 +567,96 @@ export const Reports: React.FC = () => {
           </div>
         ) : (
           <p className="text-slate-400 text-center py-8">No data available</p>
+        )}
+      </div>
+
+      {/* Rejection Analytics */}
+      <div className="mt-2">
+        <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-4 flex items-center gap-2">
+          <AlertTriangle size={18} className="text-red-500" />
+          Rejection Analytics
+          <span className="text-sm font-normal text-slate-500 dark:text-slate-400">({rejectionData.total} total rejections)</span>
+        </h3>
+        {rejectionData.total > 0 ? (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Rejections by Department */}
+            <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-premium border border-slate-200/60 dark:border-slate-700/60">
+              <h4 className="font-semibold text-slate-700 dark:text-slate-300 mb-4">By Department</h4>
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={rejectionData.byDepartment}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                    <YAxis allowDecimals={false} />
+                    <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '8px', color: '#f1f5f9', fontSize: '12px' }} />
+                    <Bar dataKey="count" fill="#ef4444" name="Rejections" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Rejections by User — Ranked Table */}
+            <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-premium border border-slate-200/60 dark:border-slate-700/60">
+              <h4 className="font-semibold text-slate-700 dark:text-slate-300 mb-4">By Requester (Repeat Offenders)</h4>
+              <div className="overflow-y-auto max-h-64">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50/80 dark:bg-slate-700/50 text-slate-500 dark:text-slate-400 sticky top-0">
+                    <tr>
+                      <th className="text-left p-2 text-xs uppercase">#</th>
+                      <th className="text-left p-2 text-xs uppercase">Requester</th>
+                      <th className="text-right p-2 text-xs uppercase">Rejections</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+                    {rejectionData.byRequester.map((item, i) => (
+                      <tr key={item.name} className="hover:bg-slate-50 dark:hover:bg-slate-700/30">
+                        <td className="p-2 text-slate-400">{i + 1}</td>
+                        <td className="p-2 text-slate-700 dark:text-slate-300">{item.name}</td>
+                        <td className="p-2 text-right font-bold text-red-600 dark:text-red-400">{item.count}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Rejection Reasons — Pie Chart */}
+            <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-premium border border-slate-200/60 dark:border-slate-700/60">
+              <h4 className="font-semibold text-slate-700 dark:text-slate-300 mb-4">Rejection Reasons</h4>
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={rejectionData.reasons} cx="50%" cy="50%" outerRadius={80} dataKey="value" label={({ percent }) => `${(percent * 100).toFixed(0)}%`}>
+                      {rejectionData.reasons.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                    </Pie>
+                    <Tooltip />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Rejection Trend — Line Chart */}
+            <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-premium border border-slate-200/60 dark:border-slate-700/60">
+              <h4 className="font-semibold text-slate-700 dark:text-slate-300 mb-4">Rejection Trend</h4>
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={rejectionData.trend}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                    <YAxis allowDecimals={false} />
+                    <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '8px', color: '#f1f5f9', fontSize: '12px' }} />
+                    <Line type="monotone" dataKey="count" stroke="#ef4444" strokeWidth={2} dot={{ fill: '#ef4444' }} name="Rejections" />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-white dark:bg-slate-800 p-8 rounded-xl shadow-premium border border-slate-200/60 dark:border-slate-700/60 text-center">
+            <AlertTriangle size={32} className="mx-auto text-slate-300 dark:text-slate-600 mb-3" />
+            <p className="text-slate-500 dark:text-slate-400">No rejected requests in the selected period</p>
+          </div>
         )}
       </div>
 
